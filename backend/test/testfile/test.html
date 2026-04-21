@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test WebSocket</title>
+</head>
+<body style="font-family: Arial; padding: 50px;">
+    <h2>🚀 ทดสอบยิง WebSocket หา Jetson</h2>
+    
+    <h3 id="status" style="color: orange;">⏳ กำลังเชื่อมต่อ...</h3>
+    
+    <button id="sendBtn" disabled style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+        ส่งข้อมูล Heartbeat (จำลอง Jetson)
+    </button>
+
+    <script>
+        // 1. ต่อสายไปที่ Server ของเรา
+        const ws = new WebSocket('ws://127.0.0.1:5000/ws/heartbeat');
+        const statusText = document.getElementById('status');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // 2. ถ้าต่อติด ให้เปลี่ยนสีข้อความและเปิดปุ่ม
+        ws.onopen = () => {
+            statusText.innerText = '✅ เชื่อมต่อสำเร็จ! (Connected)';
+            statusText.style.color = 'green';
+            sendBtn.disabled = false;
+        };
+
+        // 3. เมื่อกดปุ่ม ให้ส่ง JSON ไปหา Server
+        sendBtn.onclick = () => {
+            const data = {
+                runningStatus: "active",
+                cpuTemp: 45.5,
+                gpuTemp: 42.1
+            };
+            ws.send(JSON.stringify(data));
+            alert('ส่งข้อมูลสำเร็จ! หันไปดู Terminal ใน VS Code ได้เลยครับ');
+        };
+
+        // 4. ถ้ามี Error
+        ws.onerror = (error) => {
+            statusText.innerText = '❌ เชื่อมต่อล้มเหลว (เช็คว่า Server รันอยู่ไหม)';
+            statusText.style.color = 'red';
+        };
+    </script>
+</body>
+</html>

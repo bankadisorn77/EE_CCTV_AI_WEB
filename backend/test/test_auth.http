@@ -1,0 +1,94 @@
+### ตั้งค่าตัวแปร (Variables)
+@baseUrl = http://localhost:5000/api
+@adminToken = {{loginAdmin.response.body.accessToken}}
+@refreshToken = {{loginAdmin.response.body.refreshToken}}
+
+### 1. Login ในฐานะ Admin
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "en": "admin",
+    "password": "1234"
+}
+
+###
+
+### 2. Admin สร้างบัญชี Engineer ใหม่ (เทสระบบ Register)
+# @name createEngineer
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{   "en": "eng_rayong", 
+    "password": "1234",
+    "role": "engineer",
+    "plant": "RAYONG_06"
+}
+
+###
+
+### 3. Login ในฐานะ Engineer (เพื่อเอา Token ไปสร้าง User ต่อ)
+# @name loginEngineer
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "en": "eng_rayong",
+    "password": "1234"
+}
+
+###
+
+### 4. Engineer สร้างบัญชี User (เฉพาะใน Plant ตัวเอง)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+{
+    "en": "user_zone_a",
+    "password": "1234",
+    "role": "user",
+    "plant": "RAYONG_06"
+}
+
+###
+
+### 5. แก้ไขสิทธิ์ Zone ให้ User (Admin หรือ Engineer เป็นคนทำ)
+PUT {{baseUrl}}/auth/user/staff_line012/zones
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+    "accessibleZones": "Assembly Line, Packing"
+}
+
+###
+### 5. แก้ไขสิทธิ์ Zone ให้ User (Admin หรือ Engineer เป็นคนทำ)
+PUT {{baseUrl}}/auth/user/staff_line2/zones
+Content-Type: application/json
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+{
+    "accessibleZones": "Assembly Line, Packing"
+}
+
+###
+
+### 6. ทดสอบ Refresh Token (ขอกุญแจใหม่โดยใช้ Refresh Token)
+POST {{baseUrl}}/auth/refresh-token
+Content-Type: application/json
+
+{
+    "refreshToken": "{{refreshToken}}"
+}
+
+###
+
+### 7. Logout (ยกเลิก Refresh Token ใน Database)
+POST {{baseUrl}}/auth/logout
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{}

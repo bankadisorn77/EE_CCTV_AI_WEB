@@ -1,0 +1,4 @@
+
+npx sequelize-cli migration:generate --name add-health-fields-to-devices
+
+npx sequelize-cli db:migrate --config config/config.js

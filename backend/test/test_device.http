@@ -1,0 +1,62 @@
+### 1. Register เครื่องใหม่ (ครั้งแรกครั้งเดียว)
+# จำลองเครื่อง Jetson ส่ง MAC และ IP มาขอ ID และ API Key
+# @name selfRegister
+POST http://localhost:5000/api/device/register
+Content-Type: application/json
+
+{
+    "mac": "00:0A:95:9D:68:95",
+    "ip": "192.168.1.59"
+}
+
+### ---------------------------------------------------
+
+### เก็บค่าที่ได้จากการ Register มาใช้เทสต่อ
+@mcId = MC-0FF186
+@apiKey = bc4a114acd9aaff998f5d8ebf832bdd44a31228f547a8ee7c3feb90ee525cf6c
+
+### ---------------------------------------------------
+
+### 2. ส่ง Heartbeat (จำลองเครื่องรายงานตัวเป็นระยะ)
+POST http://localhost:5000/api/device/heartbeat
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+    "runningStatus": "active",
+    "cpuTemp": 5.5,
+    "gpuTemp": 7.2,
+    "memoryFree": 48,
+    "memoryUsed": 496,
+    "aiVersion": "v1.12.3"
+}
+
+### ---------------------------------------------------
+
+### 3. ส่ง Alarm (พร้อมภาพ Base64)
+# ระบบจะแปลงไฟล์ไปเก็บที่ /uploads และยิง Socket.io ไปที่กลุ่ม 'Unassigned' 
+# (เพราะค่าเริ่มต้นยังไม่ถูกย้าย Plant)
+POST http://localhost:5000/api/device/alarm
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+    "alarmType": "NO_HELMET",
+    "message": "Detection in Zone A",
+    "cameraId": "CAM-01",
+    "confidence": 0.98,
+    "imageBase64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZnaEicRWhImKiwSFlV4eXm6ip6SktLS0tRV19VZWztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/oooorA//9k="
+}
+
+### ---------------------------------------------------
+
+### 4. ทดสอบ Alarm แบบไม่มีภาพ (ต้องทำงานได้)
+POST http://localhost:5000/api/device/alarm
+Content-Type: application/json
+x-api-key: {{apiKey}}
+
+{
+    "alarmType": "SYSTEM_OFFLINE",
+    "message": "Camera signal lost",
+    "confidence": 1.0
+}

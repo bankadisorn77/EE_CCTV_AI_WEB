@@ -1,0 +1,10 @@
+95
+{
+  "mcId": "MC-253599",
+  "apiKey": "7dcc306f120c613871348fb37b9188f008f492295537e7120babc4586d77969e"
+}
+96
+{
+  "mcId": "MC-C72E68",
+  "apiKey": "44d9ab2aa04e7cf309bc13e43222cb762127917f975e88d07c99bd1aed3dfa2d"
+}

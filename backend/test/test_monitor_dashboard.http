@@ -1,0 +1,84 @@
+### ตั้งค่าตัวแปรเบื้องต้น
+@baseUrl = http://localhost:5000/api
+@mcId_Unassigned = MC-EFFA48
+@mcId_InPlant = MC-0637F4
+
+### 1. LOGIN เป็นตัวละครต่างๆ เพื่อรับ Token
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "en": "admin", "password": "1234" }
+
+###
+# @name loginEngineer
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "en": "eng_rayong", "password": "1234" }
+
+###
+# @name loginUser
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "en": "user_zone_a", "password": "1234" }
+
+### ---------------------------------------------------
+### 2. TEST: ดึงข้อมูลไปโชว์ที่ Dashboard (GET /devices)
+
+### [ADMIN] ต้องเห็นเครื่องทั้งหมด ทุก Plant
+GET {{baseUrl}}/monitor/devices
+Authorization: Bearer {{loginAdmin.response.body.accessToken}}
+
+### [ENGINEER] ต้องเห็นเครื่องใน Plant ตัวเอง + เครื่องที่ยังว่าง (Unassigned)
+GET {{baseUrl}}/monitor/devices
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+### [USER] ต้องเห็นเฉพาะเครื่องในโซนที่ตัวเองมีสิทธิ์ (เช่น Zone A)
+GET {{baseUrl}}/monitor/devices
+Authorization: Bearer {{loginUser.response.body.accessToken}}
+
+### ---------------------------------------------------
+### 3. TEST: การแก้ไข Settings (PUT /settings/:mcId)
+
+### [ENGINEER ยึดเครื่อง] เปลี่ยนจาก Unassigned มาเป็นของตัวเอง
+PUT {{baseUrl}}/settings/{{mcId_Unassigned}}
+Content-Type: application/json
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+{
+    "deviceName": "Jetson-Front-Gate",
+    "zone": "Gate-01"
+}
+# ผลลัพธ์: plant จะต้องเปลี่ยนจาก Unassigned เป็น Plant ของ Engineer โดยอัตโนมัติ
+
+### [ENGINEER แก้ไขเครื่องตัวเอง] เปลี่ยนชื่อหรือโซน
+PUT {{baseUrl}}/monitor/settings/{{mcId_Unassigned}}
+Content-Type: application/json
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+{
+    "deviceName": "U5555",
+    "zone": "4874545454545455"
+}
+
+### [ENGINEER ลองของ] พยายามเปลี่ยน Plant เครื่องตัวเอง (ต้องไม่สำเร็จตาม Logic)
+PUT {{baseUrl}}/monitor/settings/{{mcId_Unassigned}}
+Content-Type: application/json
+Authorization: Bearer {{loginEngineer.response.body.accessToken}}
+
+{
+    "plant": "SOME_OTHER_PLANT"
+}
+# ผลลัพธ์: ข้อมูลบันทึกสำเร็จแต่ Plant ต้องไม่เปลี่ยน (เพราะโค้ดไม่ได้ใส่ targetPlant ในเคสนี้)
+
+### [USER แก้ไข] ต้องโดน Reject
+PUT {{baseUrl}}/monitor/settings/{{mcId_InPlant}}
+Content-Type: application/json
+Authorization: Bearer {{loginUser.response.body.accessToken}}
+
+{
+    "deviceName": "Hacker-Device"
+}
+# ผลลัพธ์: 403 Forbidden
