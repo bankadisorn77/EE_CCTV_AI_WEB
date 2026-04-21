@@ -12,10 +12,7 @@ router.get('/', verifyToken, async (req, res) => {
 
 
     if(role === 'admin') {
-      // console.log("Admin requested device list");
       const devices = await Device.findAll();
-      // console.log(devices);
-      // list of device main key is Zone, the data info is mcID, deviceName, plant, activeDevice,runningStatus, confidentLevel
       const deviceList = devices.map(d => ({
         mcId: d.mcId,
         deviceName: d.deviceName,
