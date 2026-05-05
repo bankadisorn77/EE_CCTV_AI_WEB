@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const { Device, Alarm } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const path = require('path');
-router.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+router.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // 1. ดึงข้อมูลไปโชว์ที่ Dashboard (GET /api/monitor/devices)
 router.get('/devices', verifyToken, async (req, res) => {
   const { role, plant } = req.user;

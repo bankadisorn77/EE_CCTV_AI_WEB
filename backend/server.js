@@ -25,6 +25,12 @@ const settingRoutes = require('./routes/setting');
 app.use(express.json({ limit: '20mb' }));
 app.use(cors());
 
+// Add logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - ${req.ip}`);
+  next();
+});
+
 app.use('/uploads', express.static('uploads'));
 
 // ส่ง socket.io ไปให้ routes ใช้ผ่าน req.app.get('socketio')
@@ -108,7 +114,7 @@ io.on('connection', (socket) => {
 
 
 // --- Test Route ---
-app.get('/api/test', (req, res) => {
+app.get('/test', (req, res) => {
   res.json({ message: "API is working!" });
 });
 
@@ -130,7 +136,7 @@ sequelize.sync().then(async () => {
 
   // ตรวจสอบ/สร้าง Admin เริ่มต้น
   const adminExists = await User.findOne({ where: { en: 'admin' } });
-  if (!adminExists) {;
+  if (!adminExists) {
     await User.create({
       en: 'admin',
       password: '1234',
@@ -145,12 +151,8 @@ sequelize.sync().then(async () => {
   await Device.update({ runningStatus: 'inactive' }, { where: {} });
 
   const port = process.env.PORT || 3000;
-  server.listen(port, () => console.log(`Backend System Running on port ${port}`));
+  const host = process.env.HOST || '0.0.0.0';
+  server.listen(port, host, () => console.log(`Backend System Running on http://${host}:${port}`));
 }).catch(err => {
   console.error('Database sync failed:', err);
-});
-
-
-app.get('/test-ws', (req, res) => {
-  res.sendFile(path.join(__dirname, 'test\\testfile\\test.html')); 
 });

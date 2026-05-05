@@ -11,9 +11,13 @@ const SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 // 1. LOGIN (ออกทั้ง Access และ Refresh)
 router.post('/login', async (req, res) => {
   try {
+    console.log("--> Login attempt received for:", req.body.en);
     const { en, password } = req.body;
     const user = await User.findOne({ where: { en } });
+    console.log("--> User query completed. Found:", user ? "Yes" : "No");
+    
     if (user && await bcrypt.compare(password, user.password)) {
+      console.log("--> Password matched. Generating tokens...");
       // Access Token: สั้น (15 นาที) เพื่อความปลอดภัย
       const accessToken = jwt.sign(
         { id: user.id, en: user.en, role: user.role, plant: user.plant },
