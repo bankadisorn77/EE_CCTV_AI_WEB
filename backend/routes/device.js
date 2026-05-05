@@ -5,6 +5,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { Device, Alarm } = require('../models');
 const { verifyApiKey } = require('../middleware/auth');
+const sharp = require('sharp');
 router.get('/check-api-key', verifyApiKey, (req, res) => {
   res.status(200).json({ success: true });
 });
@@ -12,39 +13,42 @@ router.get('/check-api-key', verifyApiKey, (req, res) => {
 // Register เครื่องใหม่ (Unassigned)
 router.post('/register', async (req, res) => {
   try {
-    const { mac, ip } = req.body;
-    
-    // สร้าง ID สุ่มขึ้นมาก่อน
+    const { mac, ip, frame} = req.body;
     const mcId = 'MC-' + crypto.randomBytes(3).toString('hex').toUpperCase();
     const apiKey = crypto.randomBytes(32).toString('hex');
 
-    // ตรวจสอบว่า MAC Address ซ้ําหรือไม่
     const existingDevice = await Device.findOne({ where: { mac } });
     if (existingDevice) {
       return res.status(400).json({ error: "Device already registered" });
     }
-
-    // สร้าง Record โดยใช้ mcId เป็นชื่อตั้งต้น (deviceName)
+    for(let i=1; i<=4; i++){
+      if(frame[`cam${i}`]){
+        const base64Data = frame[`cam${i}`].replace(/^data:image\/\w+;base64,/, "");
+        const fileName = `device_${mcId}_cam${i}.jpg`;
+        const fullPath = path.join(__dirname, '../uploads', fileName);
+        fs.writeFileSync(fullPath, base64Data, 'base64');
+      }
+    }
     await Device.create({ 
       mcId, 
       apiKey,
-      deviceName: mcId, // <--- ใช้ ID เป็นชื่อเริ่มต้นตามที่คุณต้องการ
+      deviceName: mcId, 
       mac, 
       ip,
-      plant: 'Unassigned', // มั่นใจว่าสถานะเริ่มต้นคือรอการ Assign
+      plant: 'Unassigned', 
       zone: 'Unassigned',
       confidentLevel: 0.7,
       roi:"",
+      cam1: `device_${mcId}_cam1.jpg` || '',
+      cam2: `device_${mcId}_cam2.jpg` || '',
+      cam3: `device_${mcId}_cam3.jpg` || '',
+      cam4: `device_${mcId}_cam4.jpg` || ''
     });
-    // บอกว่ามีการสร้างเครื่องใหม่
     // const io = req.app.get('socketio');
     // io.to('Unassigned').emit('device-status', {
 
     // });
-
-    // // สำหรับ Admin (plant="ALL") ให้มีสิทธิ์รับ event ด้วย
     // io.to('ALL').emit('device-status', {
-
     // });
     res.json({ mcId, apiKey });
   } catch (err) {
@@ -54,7 +58,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ส่งสถานะเครื่อง (Heartbeat)
+
 router.post('/heartbeat', verifyApiKey, async (req, res) => {
   await req.device.update({ ...req.body, lastSeen: new Date() });
   res.json({ success: true });
@@ -62,24 +66,26 @@ router.post('/heartbeat', verifyApiKey, async (req, res) => {
 
 router.post('/alarm', verifyApiKey, async (req, res) => {
   try {
-    // console.log("Received alarm from device %s: %o", req.device.mcId, req.body);
     const { alarmType, message, imageBase64, confidence, cameraId } = req.body;
-    // console.log("Received alarm from device %s: %s", req.device.mcId, message);
     let imagePath = null;
+if (imageBase64) {
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const imgBuffer = Buffer.from(base64Data, 'base64');
+    const fileName = `alarm_${Date.now()}_${req.device.mcId}.jpg`;
+    const fullPath = path.join(__dirname, '../uploads', fileName);
 
-    // ถ้ามีการส่งภาพมา ให้แปลงและบันทึก
-    if (imageBase64) {
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-      const fileName = `alarm_${Date.now()}_${req.device.mcId}.jpg`;
-      const fullPath = path.join(__dirname, '../uploads', fileName);
-
-      if(!fs.existsSync(path.join(__dirname, '../uploads'))) {
+    if (!fs.existsSync(path.join(__dirname, '../uploads'))) {
         fs.mkdirSync(path.join(__dirname, '../uploads'));
-      }
-      
-      fs.writeFileSync(fullPath, base64Data, 'base64');
-      imagePath = `/uploads/${fileName}`; // Path ที่จะเก็บลง DB
     }
+    await sharp(imgBuffer)
+      .resize(1920, 1080, {fit: 'fill'},{
+        kernel: sharp.kernel.lanczos3
+      })
+      .sharpen()
+      .jpeg({ quality: 95 })
+      .toFile(fullPath);
+    imagePath = `/uploads/${fileName}`;
+}
 
     // 1. บันทึกลง Database
     const newAlarm = await Alarm.create({

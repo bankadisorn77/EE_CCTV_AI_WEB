@@ -36,7 +36,9 @@ io.on('connection', (socket) => {
     // console.log(`Client joined plant room: ${plantName}`);
   });
   socket.on('register-device-status',async (data) => {
-    const{apiKey} = data;
+    const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+    const { apiKey } = parsedData;
+    console.log(`Device attempting to register with API key: ${apiKey}`);
     try{
         const device = await Device.findOne({where:{apiKey}})
         if(device){
@@ -51,8 +53,9 @@ io.on('connection', (socket) => {
   socket.on('heartbeat', async (stats) => {
     if (socket.mcId) {
       try {
-        await Device.update({ ...stats, lastSeen: new Date() }, { where: { mcId: socket.mcId } });
-        // console.log(`Received heartbeat from ${socket.mcId}:`, stats);
+        const parsedData = typeof stats === 'string' ? JSON.parse(stats) : stats;
+        await Device.update({ ...parsedData, lastSeen: new Date() }, { where: { mcId: socket.mcId } });
+        // console.log(`Received heartbeat from ${socket.mcId}:`, parsedData);
 
         // Notify UI clients in this plant room that a device status changed
         const device = await Device.findOne({ where: { mcId: socket.mcId } });

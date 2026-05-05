@@ -105,4 +105,21 @@ router.put('/alarms/:id', verifyToken, async (req, res) => {
   await alarm.update({ isFlagged: status });
   res.json({ message: "Alarm status updated successfully" });
 });
+
+router.get("/frame/:mcId/:cameraId", async (req, res) => {
+  try {
+    const { mcId, cameraId } = req.params;
+    const device = await Device.findOne({ where: { mcId } });
+    if (!device) return res.status(404).json({ error: "Device not found" });
+
+    const imagePath = device[`cam${cameraId}`];
+    console.log(`Fetching frame for ${mcId} camera ${cameraId}:`, imagePath);
+    if (!imagePath) return res.status(404).json({ error: "Image not found" });
+
+    res.sendFile(path.join(__dirname, '../uploads', imagePath));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error occurred while fetching frame" });
+  }
+});
 module.exports = router;

@@ -3,24 +3,24 @@ const sequelize = require('../config/database');
 
 const Device = sequelize.define('Device', {
   mcId: { type: DataTypes.STRING, primaryKey: true },
-  apiKey: { type: DataTypes.STRING, unique: true }, // สำหรับใช้แทน JWT ที่หมดอายุ
+  apiKey: { type: DataTypes.STRING, unique: true }, 
 
   plant: { 
         type: DataTypes.STRING, 
         allowNull: false,
-        defaultValue: 'Unassigned' // เปลี่ยนจาก Undefined เป็น Unassigned ให้ตรงกัน
+        defaultValue: 'Unassigned' 
  },
   deviceName: { 
     type: DataTypes.STRING, 
-    defaultValue: 'New Device' // ค่าเริ่มต้น
+    defaultValue: 'New Device' 
   },
   zone: { 
     type: DataTypes.STRING, 
-    defaultValue: 'Unassigned' // เช่น Zone A, ชั้น 1, คลังสินค้า
+    defaultValue: 'Unassigned' 
   },
   
   ip: DataTypes.STRING,
-  mac: DataTypes.STRING, // ไม่ต้อง unique สำหรับ MAC Address เพราะอาจมีเครื่องซ้ำกันได้
+  mac: DataTypes.STRING, 
   runningStatus: { type: DataTypes.ENUM('active', 'inactive', 'error'), defaultValue: 'active' },
   confidentLevel: DataTypes.FLOAT,
   cpuTemp: DataTypes.FLOAT,
@@ -28,9 +28,13 @@ const Device = sequelize.define('Device', {
   memoryFree: DataTypes.FLOAT,
   memoryUsed: DataTypes.FLOAT,
   aiVersion: DataTypes.STRING,
-  roiData : DataTypes.JSON, // ข้อมูล ROI ที่อาจมีหลายค่า
+  roiData : DataTypes.JSON, 
   activeDevice: { type: DataTypes.BOOLEAN, defaultValue: true },
-  lastSeen: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+  lastSeen: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  cam1:{type: DataTypes.STRING, defaultValue: ''},
+  cam2:{type: DataTypes.STRING, defaultValue: ''},
+  cam3:{type: DataTypes.STRING, defaultValue: ''},
+  cam4:{type: DataTypes.STRING, defaultValue: ''},
 });
 
 module.exports = Device;
