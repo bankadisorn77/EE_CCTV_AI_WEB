@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
+const { Op } = require('sequelize');
 const { Device } = require('../models');
 const { verifyToken, verifyApiKey } = require('../middleware/auth');
 // const {sendParameterByDeviceId} = require('./parameter.js');
@@ -27,10 +28,7 @@ router.get('/', verifyToken, async (req, res) => {
     else if(role === 'engineer') {
       const devices = await Device.findAll({ 
         where: { 
-          [require('sequelize').Op.or]: [
-            { plant: userPlant }, 
-            { plant: 'Unassigned' }
-          ]
+          [Op.or]: [{ plant: userPlant }, { plant: 'Unassigned' }]
         } 
       });
       const deviceList = devices.map(d => ({
@@ -70,6 +68,7 @@ router.get('/:mcId', verifyToken, async (req, res) => {
 });
 
 router.put('/:mcId', verifyToken, async (req, res) => {
+  // console.log("Received request to update device settings:", req.body);
   const { role, plant: userPlant } = req.user;
   const { deviceName, 
           zone, 
@@ -77,15 +76,13 @@ router.put('/:mcId', verifyToken, async (req, res) => {
           confidentLevel,
           roiData,
           ip,
-          activeDevice
         } = req.body;
         const targetPlant = req.body.plant?.toLowerCase();
-  // console.log(ip, confidentLevel, roiData,activeDevice);
-  // console.log(targetPlant)
+        console.log(`Debug: ActiveDevice: ${targetActiveDevice}`)
   try {
     const device = await Device.findByPk(req.params.mcId);
     if (!device) return res.status(404).json({ error: "Device not found" });
-
+    console.log(`Debug: ActiveDevice before update: ${device.activeDevice}`)
     // --- ตรวจสอบสิทธิ์ (Permission Check) ---
 
     // [CASE ADMIN]: Full Access
@@ -99,23 +96,24 @@ router.put('/:mcId', verifyToken, async (req, res) => {
         roiData: roiData || device.roiData
 
       });
-      sendParameterstoDevice(ip, confidentLevel, roiData, activeDevice)
+      console.log(`Debug: ActiveDevice after update: ${device.activeDevice}`)
+      sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
       return res.json({ message: "Admin updated device successfully", device });
     }
 
     // [CASE ENGINEER]: 
     if (role === 'engineer') {
       // ก. เครื่องใหม่ (Unassigned) -> ยึดเข้า Plant และตั้งชื่อ/โซน
-      if (device.plant === 'Unassigned') {
+      if (device.plant === 'Unassigned' || device.plant === 'unassigned'|| device.plant === userPlant) {
         await device.update({
           deviceName: deviceName || device.mcId,
           zone: zone || 'Unassigned',
           plant: userPlant, // บังคับลง Plant ตัวเอง
-          activeDevice: targetActiveDevice || device.activeDevice,
+          activeDevice: targetActiveDevice ?? device.activeDevice,
           confidentLevel: confidentLevel || device.confidentLevel,
           roiData: roiData || device.roiData
         });
-        sendParameterstoDevice(ip, confidentLevel, roiData, activeDevice)
+        sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
         return res.json({ message: "Engineer assigned device to plant", device });
       }
 
@@ -124,11 +122,11 @@ router.put('/:mcId', verifyToken, async (req, res) => {
         await device.update({
           deviceName: deviceName || device.deviceName,
           zone: zone || device.zone,
-          activeDevice: targetActiveDevice || device.activeDevice,
+          activeDevice: targetActiveDevice ?? device.activeDevice,
           confidentLevel: confidentLevel || device.confidentLevel,
           roiData: roiData || device.roiData
         });
-        sendParameterstoDevice(ip, confidentLevel, roiData, activeDevice)
+        sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
         return res.json({ message: "Engineer updated name/zone", device });
       }
 

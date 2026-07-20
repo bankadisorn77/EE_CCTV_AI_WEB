@@ -42,14 +42,10 @@ router.post('/register', async (req, res) => {
       cam1: `device_${mcId}_cam1.jpg` || '',
       cam2: `device_${mcId}_cam2.jpg` || '',
       cam3: `device_${mcId}_cam3.jpg` || '',
-      cam4: `device_${mcId}_cam4.jpg` || ''
+      cam4: `device_${mcId}_cam4.jpg` || '',
     });
-    // const io = req.app.get('socketio');
-    // io.to('Unassigned').emit('device-status', {
-
-    // });
-    // io.to('ALL').emit('device-status', {
-    // });
+    const io = req.app.get('socketio');
+    io.emit('new-device');
     res.json({ mcId, apiKey });
   } catch (err) {
     // กรณี MAC Address ซ้ำ (เพราะเราตั้ง unique: true ไว้ใน Model)
@@ -98,12 +94,19 @@ if (imageBase64) {
     });
 
     // 2. Real-time Hook: ส่งไปให้เฉพาะคนใน Plant นั้นๆ เห็นทันที
+    // และส่งให้ Engineer ที่ join ห้อง 'Unassigned' รออยู่ด้วย
     const io = req.app.get('socketio');
     io.to(req.device.plant).emit('new-alarm', {
       alarm: newAlarm,
       deviceName: req.device.deviceName,
       zone: req.device.zone
     });
+    // --- FIX: ถ้า Alarm ไม่ได้มาจากเครื่อง Unassigned ให้ส่งไปห้อง Unassigned ด้วย ---
+    // เพื่อให้ Engineer ที่ไม่ได้อยู่ Plant เดียวกับเครื่องนี้ แต่มีสิทธิ์เห็น Unassigned ได้รับการแจ้งเตือน
+    if (req.device.plant.toLowerCase() !== 'unassigned') {
+      io.to('Unassigned').emit('new-alarm', { alarm: newAlarm, deviceName: req.device.deviceName, zone: req.device.zone });
+      io.to('unassigned').emit('new-alarm', { alarm: newAlarm, deviceName: req.device.deviceName, zone: req.device.zone });
+    }
 
     // สำหรับ Admin (plant="ALL") ให้มีสิทธิ์รับ event ด้วย
     io.to('ALL').emit('new-alarm', {

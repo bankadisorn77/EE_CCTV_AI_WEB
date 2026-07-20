@@ -1,0 +1,46 @@
+Folder PATH listing for volume DATA
+Volume serial number is 0099-0B68
+D:.
+|   App.css
+|   App.jsx
+|   folder_structure.txt
+|   index.css
+|   main.jsx
+|   SideBar.css
+|   
++---assets
+|       icon_dashboard.svg
+|       icon_machine.svg
+|       icon_zone.svg
+|       logo.png
+|       react.svg
+|       
++---components
+|       AlarmToast.jsx
+|       Footer.jsx
+|       Icons.jsx
+|       MonitoringSidebar.jsx
+|       Navbar.jsx
+|       Notificationcontext.jsx
+|       SettingSidebar.jsx
+|       
++---Layouts
+|       MainLayout.jsx
+|       
++---pages
+|   |   HomePage.jsx
+|   |   LoginPage.jsx
+|   |   MonitorPage.jsx
+|   |   RegisterPage.jsx
+|   |   SettingPage.jsx
+|   |   
+|   +---SubMonitorPages
+|   |       DashboardPage.jsx
+|   |       MachinePage.jsx
+|   |       
+|   \---SubSettingPages
+|           DeviceSettingPage.jsx
+|           
+\---services
+        apiAuth.js
+        

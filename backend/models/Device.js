@@ -29,7 +29,7 @@ const Device = sequelize.define('Device', {
   memoryUsed: DataTypes.FLOAT,
   aiVersion: DataTypes.STRING,
   roiData : DataTypes.JSON, 
-  activeDevice: { type: DataTypes.BOOLEAN, defaultValue: true },
+  activeDevice: { type: DataTypes.BOOLEAN, defaultValue: false },
   lastSeen: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   cam1:{type: DataTypes.STRING, defaultValue: ''},
   cam2:{type: DataTypes.STRING, defaultValue: ''},

@@ -27,7 +27,7 @@ app.use(cors());
 
 // Add logging middleware
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - ${req.ip}`);
+  // console.log(`${req.method} ${req.path} - ${req.ip}`);
   next();
 });
 
@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
   socket.on('register-device-status',async (data) => {
     const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
     const { apiKey } = parsedData;
-    console.log(`Device attempting to register with API key: ${apiKey}`);
+    // console.log(`Device attempting to register with API key: ${apiKey}`);
     try{
         const device = await Device.findOne({where:{apiKey}})
         if(device){
@@ -73,7 +73,7 @@ io.on('connection', (socket) => {
             plant: device.plant,
             zone: device.zone,
           };
-
+          // console.log(`Emitting device status update for ${socket.mcId}:`, payload,`ActiveDevice: ${parsedData.activeDevice }`);
           io.to(device.plant).emit('device-status', payload);
           io.to('ALL').emit('device-status', payload);
         }
@@ -99,7 +99,8 @@ io.on('connection', (socket) => {
             runningStatus: 'inactive',
             lastSeen: new Date(),
             plant: device.plant,
-            zone: device.zone,
+            zone: device.zone,  
+            activeDevice: false,
           };
 
           io.to(device.plant).emit('device-status', payload);
