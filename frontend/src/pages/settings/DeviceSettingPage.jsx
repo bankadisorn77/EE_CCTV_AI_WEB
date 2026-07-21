@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { StatusPill } from "../../components/ui/StatusBadge";
 import { cn } from "../../lib/utils";
 import { updateSettings } from '../../services/apiSetting'
@@ -9,7 +9,7 @@ import { updateSettings } from '../../services/apiSetting'
 
 async function saveDevice(mcId, payload) {
   // console.log("saveDevice", mcId, payload);
-  const res = await updateSettings(mcId, payload);
+  const res = await updateSettings(mcId, payload); // This was calling the wrong endpoint/payload
   //setOriginal(payload);
   return {
     id: mcId,
@@ -92,8 +92,49 @@ function Input({ value, onChange, placeholder, disabled, type = "text", ...props
       {...props}
     />
   );
-}
+  }
 
+const DeviceStatusCards = memo(function DeviceStatusCards({ status }) {
+  const items = [
+    { label: "CPU Temp", value: status.cpuTemp != null ? `${status.cpuTemp}°C` : "—", icon: "🌡️" },
+    { label: "GPU Temp", value: status.gpuTemp != null ? `${status.gpuTemp}°C` : "—", icon: "🎮" },
+    { label: "Mem Free", value: status.memoryFree != null ? `${status.memoryFree} MB` : "—", icon: "💾" },
+    { label: "Mem Used", value: status.memoryUsed != null ? `${status.memoryUsed} MB` : "—", icon: "📊" },
+  ];
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {items.map((s) => (
+        <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+          <p className="text-base mb-1">{s.icon}</p>
+          <p className="text-sm font-bold text-gray-700">{s.value}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{s.label}</p>
+        </div>
+      ))}
+      </div>
+      {status.lastSeen && (
+        <p className="mt-3 text-xs text-gray-400 text-right">
+          Last seen: <span className="font-semibold text-gray-600">{new Date(status.lastSeen).toLocaleString("en-GB")}</span>
+        </p>
+      )}
+    </>
+  );
+});
+
+const LiveDeviceStatus = ({ initialStatus, liveStatus }) => {
+  const [status, setStatus] = useState(initialStatus);
+
+  useEffect(() => {
+    setStatus(initialStatus);
+  }, [initialStatus]);
+
+  useEffect(() => {
+    if (liveStatus) setStatus(prev => ({ ...prev, ...liveStatus }));
+  }, [liveStatus]);
+
+  return <DeviceStatusCards status={status} />;
+};
 // ── Camera ROI panel ──────────────────────────────────────────────────────────
 
 function CameraROIPanel({ mcId, cam, onCamChange }) {
@@ -310,30 +351,57 @@ const DEFAULT_ROIS = [
   { name: "cam4", machineCount: 0, roi: { row1: null, col1: null,  row2: null, col2: null }},
 ];
 
+function normalizeROIs(value) {
+  const fallback = DEFAULT_ROIS.map((cam) => ({ ...cam, roi: { ...cam.roi } }));
+
+  if (!value) return fallback;
+
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((cam, index) => ({
+        name: cam?.name ?? fallback[index]?.name ?? `cam${index + 1}`,
+        machineCount: cam?.machineCount ?? 0,
+        roi: cam?.roi ?? { row1: null, col1: null, row2: null, col2: null },
+      }));
+    }
+
+    if (parsed && typeof parsed === "object") {
+      return Object.entries(parsed).map(([name, cam]) => ({
+        name,
+        machineCount: cam?.machineCount ?? 0,
+        roi: cam?.roi ?? { row1: null, col1: null, row2: null, col2: null },
+      }));
+    }
+  } catch {
+    // fall back to default ROI layout
+  }
+
+  return fallback;
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
-export default function DeviceSettingsPanel({ device, onSaved }) {
+export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null }) {
   const [form,      setForm]      = useState(null);
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
   const [dirty,     setDirty]     = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
   const [ROIs,      setROIs]      = useState(DEFAULT_ROIS);
   const [activeCam, setActiveCam] = useState(0);
-  const [original,  setOriginal]  = useState(null);
 
 
   const ZONES        = ["Unassigned", "Zone A", "Zone B", "Zone C"];
-  const isUnassigned = !original?.zone || original?.zone === "Unassigned";
+  const isUnassigned = !device?.zone || device?.zone === "Unassigned";
 
 
 
   useEffect(() => {
     if (device) {
-      setOriginal({ ...device });
-      setForm({ ...device }); setDirty(false); setSaved(false); setActiveCam(0);
-      try {
-        setROIs(device.roiData ? JSON.parse(typeof device.roiData === "string" ? device.roiData : JSON.stringify(device.roiData)) : DEFAULT_ROIS); }
-      catch { setROIs(DEFAULT_ROIS); }
+      setForm({ ...device }); setDirty(false); setSaved(false); setErrorMessage(null); setActiveCam(0);
+      setROIs(normalizeROIs(device.roiData));
     }
   }, [device?.mcId]);
 
@@ -345,61 +413,29 @@ export default function DeviceSettingsPanel({ device, onSaved }) {
     setSaved(false); 
   }
 
-useEffect(() => {
-    if (!device) return;
-
-    // กรณีที่ 1: เปลี่ยนเครื่องใหม่ (mcId ไม่ตรงกับของเดิม) ให้ Reset Form ทั้งหมด
-    if (device.mcId !== original?.mcId) {
-      setOriginal({ ...device });
-      setForm({ ...device });
-      setDirty(false);
-      setSaved(false);
-      setActiveCam(0);
-      try {
-        setROIs(device.roiData ? JSON.parse(typeof device.roiData === "string" ? device.roiData : JSON.stringify(device.roiData)) : DEFAULT_ROIS);
-      } catch { setROIs(DEFAULT_ROIS); }
-    } 
-    // กรณีที่ 2: เป็นเครื่องเดิม แต่มีข้อมูลอัปเดตมาจาก Socket (เช่น อุณหภูมิเปลี่ยน)
-    else {
-      setForm(prev => ({
-        ...prev,
-        // อัปเดตเฉพาะค่าที่เป็น Real-time/Read-only เสมอ
-        runningStatus: device.runningStatus,
-        cpuTemp: device.cpuTemp,
-        gpuTemp: device.gpuTemp,
-        memoryFree: device.memoryFree,
-        memoryUsed: device.memoryUsed,
-        lastSeen: device.lastSeen,
-        // อัปเดตค่าที่พิมพ์ได้ เฉพาะตอนที่ User "ไม่ได้กำลังพิมพ์ค้างไว้" (not dirty)
-        ...( !dirty && {
-          deviceName: device.deviceName,
-          plant: device.plant,
-          zone: device.zone,
-          confidentLevel: device.confidentLevel
-        })
-      }));
-      
-      // ถ้าไม่ได้แก้ ROI ค้างไว้ ให้ Sync ROI ใหม่จาก Server ด้วย
-      if (!dirty) {
-        try {
-          setROIs(device.roiData ? JSON.parse(typeof device.roiData === "string" ? device.roiData : JSON.stringify(device.roiData)) : DEFAULT_ROIS);
-        } catch { /* keep current ROIs */ }
-      }
-    }
-  }, [device]); // เปลี่ยนจาก device.mcId เป็น device เพื่อดักจับทุกการอัปเดต
-
-
-
   async function handleSave() {
-    if (!form || !dirty) return;
+    if (!form?.mcId) return;
     setSaving(true);
+    setSaved(false);
+
     try {
-      const r = await saveDevice(form.mcId, { ...form, roiData: ROIs });
-      setSaved(true); setDirty(false); onSaved?.(r);
-      setTimeout(() => setSaved(false), 3000);
-      setOriginal({ ...form });
-    } catch { alert("Failed to save."); }
-    finally { setSaving(false); }
+      const payload = {
+        ...form,
+        roiData: ROIs,
+      };
+      const updatedDevice = await saveDevice(form.mcId, payload);
+
+      setForm(updatedDevice);
+      setDirty(false);
+      setSaved(true);
+      setErrorMessage(null); // Clear any previous error on success
+      onSaved?.(updatedDevice);
+    } catch (error) {
+      console.error("Failed to save device settings:", error);
+      setErrorMessage(error.message || "An unexpected error occurred.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!device || !form) return (
@@ -418,6 +454,7 @@ useEffect(() => {
 
   const confidentLevel  = form.confidentLevel ?? 0.7;
   const saveState  = getSaveState(saved, dirty);
+  const headerStatus = liveStatus?.runningStatus ?? form.runningStatus;
 
   const SaveIcon = saving
     ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4}/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
@@ -434,7 +471,7 @@ useEffect(() => {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{form.deviceName}</h1>
-              <StatusPill status={form.runningStatus} />
+              <StatusPill status={headerStatus} />
               {isUnassigned && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-700">UNASSIGNED</span>}
             </div>
             <div className="flex items-center gap-3 text-xs text-gray-400">
@@ -459,6 +496,14 @@ useEffect(() => {
             You have unsaved changes
           </div>
         )}
+
+        {errorMessage && (
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {errorMessage}
+          </div>
+        )}
+
 
         {/* 1. Device Identity */}
         <Section title="Device Identity" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-4 h-4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>}>
@@ -529,28 +574,20 @@ useEffect(() => {
                 <p className="text-sm font-bold text-gray-700">Running Status</p>
                 <p className="text-xs text-gray-400 mt-0.5">Reported by device (read-only)</p>
               </div>
-              <StatusPill status={form.runningStatus} />
+              <StatusPill status={headerStatus} />
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "CPU Temp", value: form.cpuTemp    ? `${form.cpuTemp}°C`     : "—", icon: "🌡️" },
-              { label: "GPU Temp", value: form.gpuTemp    ? `${form.gpuTemp}°C`     : "—", icon: "🎮" },
-              { label: "Mem Free", value: form.memoryFree ? `${form.memoryFree} MB` : "—", icon: "💾" },
-              { label: "Mem Used", value: form.memoryUsed ? `${form.memoryUsed} MB` : "—", icon: "📊" },
-            ].map((s) => (
-              <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-3 text-center">
-                <p className="text-base mb-1">{s.icon}</p>
-                <p className="text-sm font-bold text-gray-700">{s.value}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{s.label}</p>
-              </div>
-            ))}
+          <div className="mt-5">
+            <LiveDeviceStatus
+              initialStatus={{
+                cpuTemp: form.cpuTemp,
+                gpuTemp: form.gpuTemp,
+                memoryFree: form.memoryFree,
+                memoryUsed: form.memoryUsed,
+                lastSeen: form.lastSeen,
+              }}
+              liveStatus={liveStatus} />
           </div>
-          {form.lastSeen && (
-            <p className="mt-3 text-xs text-gray-400 text-right">
-              Last seen: <span className="font-semibold text-gray-600">{new Date(form.lastSeen).toLocaleString("en-GB")}</span>
-            </p>
-          )}
         </Section>
 
         {/* 4. Alert Sensitivity */}

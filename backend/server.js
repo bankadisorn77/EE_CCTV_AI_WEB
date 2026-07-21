@@ -72,6 +72,10 @@ io.on('connection', (socket) => {
             lastSeen: device.lastSeen,
             plant: device.plant,
             zone: device.zone,
+            cpuTemp: device.cpuTemp,
+            gpuTemp: device.gpuTemp,
+            memoryFree: device.memoryFree,
+            memoryUsed: device.memoryUsed,
           };
           // console.log(`Emitting device status update for ${socket.mcId}:`, payload,`ActiveDevice: ${parsedData.activeDevice }`);
           io.to(device.plant).emit('device-status', payload);
@@ -87,12 +91,17 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     if (socket.mcId) {
       try {
-        const device = await Device.findOne({ where: { mcId: socket.mcId } });
         await Device.update(
-          { runningStatus: 'inactive' },
+          { runningStatus: 'inactive',
+            cpuTemp: null,
+            gpuTemp: null,
+            memoryFree: null,
+            memoryUsed: null,
+          },
           { where: { mcId: socket.mcId } }
         );
-
+        const device = await Device.findOne({ where: { mcId: socket.mcId } });
+        
         if (device) {
           const payload = {
             mcId: device.mcId,
@@ -101,8 +110,12 @@ io.on('connection', (socket) => {
             plant: device.plant,
             zone: device.zone,  
             activeDevice: false,
+            cpuTemp: device.cpuTemp,
+            gpuTemp: device.gpuTemp,
+            memoryFree: device.memoryFree,
+            memoryUsed: device.memoryUsed,
           };
-
+          console.log('Device disconnected:\n', payload);
           io.to(device.plant).emit('device-status', payload);
           io.to('ALL').emit('device-status', payload);
         }

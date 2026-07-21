@@ -145,7 +145,7 @@ router.get("/frame/:mcId/:cameraId", async (req, res) => {
     if (!device) return res.status(404).json({ error: "Device not found" });
 
     const imagePath = device[`cam${cameraId}`];
-    console.log(`Fetching frame for ${mcId} camera ${cameraId}:`, imagePath);
+    // console.log(`Fetching frame for ${mcId} camera ${cameraId}:`, imagePath);
     if (!imagePath) return res.status(404).json({ error: "Image not found" });
 
     res.sendFile(path.join(__dirname, '../uploads', imagePath));
@@ -194,7 +194,7 @@ router.delete('/alarms/:mcid', verifyToken, async (req, res) => {
     io.to('ALL').emit('new-alarm');
     io.to('Unassigned').emit('new-alarm');
     io.to('unassigned').emit('new-alarm');
-    console.log(`Deleted ${deletedCount} false alarm records for mcId ${mcid}`);
+    // console.log(`Deleted ${deletedCount} false alarm records for mcId ${mcid}`);
     res.json({ message: `Deleted ${deletedCount} false alarm records for mcId ${mcid}` });
   } catch (err) {
     console.error(err);

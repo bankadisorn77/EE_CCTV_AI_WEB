@@ -78,12 +78,14 @@ router.put('/:mcId', verifyToken, async (req, res) => {
           ip,
         } = req.body;
         const targetPlant = req.body.plant?.toLowerCase();
-        console.log(`Debug: ActiveDevice: ${targetActiveDevice}`)
+        console.log("Received request to update device settings:", req.body);
+        // console.log(`Debug: ActiveDevice: ${targetActiveDevice}`)
   try {
     const device = await Device.findByPk(req.params.mcId);
     if (!device) return res.status(404).json({ error: "Device not found" });
-    console.log(`Debug: ActiveDevice before update: ${device.activeDevice}`)
+    // console.log(`Debug: ActiveDevice before update: ${device.activeDevice}`)
     // --- ตรวจสอบสิทธิ์ (Permission Check) ---
+    const roiDataForProcessing = roiData; // Assume express.json() has already parsed it into an object/array
 
     // [CASE ADMIN]: Full Access
     if (role === 'admin') {
@@ -93,11 +95,11 @@ router.put('/:mcId', verifyToken, async (req, res) => {
         plant: targetPlant || device.plant,
         activeDevice: targetActiveDevice ?? device.activeDevice,
         confidentLevel: confidentLevel || device.confidentLevel,
-        roiData: roiData || device.roiData
+        roiData: roiDataForProcessing || device.roiData // Store the parsed object in DB
 
       });
-      console.log(`Debug: ActiveDevice after update: ${device.activeDevice}`)
-      sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
+      // console.log(`Debug: ActiveDevice after update: ${device.activeDevice}`)
+      sendParameterstoDevice(ip, confidentLevel, roiDataForProcessing, targetActiveDevice) // Pass the parsed object
       return res.json({ message: "Admin updated device successfully", device });
     }
 
@@ -111,9 +113,9 @@ router.put('/:mcId', verifyToken, async (req, res) => {
           plant: userPlant, // บังคับลง Plant ตัวเอง
           activeDevice: targetActiveDevice ?? device.activeDevice,
           confidentLevel: confidentLevel || device.confidentLevel,
-          roiData: roiData || device.roiData
+          roiData: roiDataForProcessing || device.roiData // Store the parsed object in DB
         });
-        sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
+        sendParameterstoDevice(ip, confidentLevel, roiDataForProcessing, targetActiveDevice) // Pass the parsed object
         return res.json({ message: "Engineer assigned device to plant", device });
       }
 
@@ -124,9 +126,9 @@ router.put('/:mcId', verifyToken, async (req, res) => {
           zone: zone || device.zone,
           activeDevice: targetActiveDevice ?? device.activeDevice,
           confidentLevel: confidentLevel || device.confidentLevel,
-          roiData: roiData || device.roiData
+          roiData: roiDataForProcessing || device.roiData // Store the parsed object in DB
         });
-        sendParameterstoDevice(ip, confidentLevel, roiData, targetActiveDevice)
+        sendParameterstoDevice(ip, confidentLevel, roiDataForProcessing, targetActiveDevice) // Pass the parsed object
         return res.json({ message: "Engineer updated name/zone", device });
       }
 
@@ -134,8 +136,18 @@ router.put('/:mcId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: "No permission for this device" });
     }
 
-    // [CASE USER]: ห้ามแก้
-    res.status(403).json({ error: "User role cannot edit settings" });
+    // [CASE USER]: อนุญาตให้แก้ไขเฉพาะ roiData เท่านั้น
+    if (role === 'user') {
+      if (device.plant === userPlant) {
+        await device.update({
+          roiData: roiDataForProcessing || device.roiData ,
+          activeDevice: targetActiveDevice ?? device.activeDevice,
+          confidentLevel: confidentLevel || device.confidentLevel
+        });
+        sendParameterstoDevice(ip, confidentLevel, roiDataForProcessing, targetActiveDevice) // Pass the parsed object
+        return res.json({ message: "User updated ROI data", device });
+      }
+    }
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -165,7 +177,7 @@ router.put('/:mcId', verifyToken, async (req, res) => {
 //for device called to get its settings
 router.get('/',verifyApiKey, async (req, res) => {
   try {
-    console.log("Device %s requested settings", req.device.mcId);
+    // console.log("Device %s requested settings", req.device.mcId);
     const device = await Device.findByPk(req.device.mcId);
     if (!device) return res.status(404).json({ error: "Device not found" });
     res.json({
@@ -185,15 +197,17 @@ router.get('/',verifyApiKey, async (req, res) => {
 //send parameter to jetson server at endpoit /parameters
 function sendParameterstoDevice(ip, confidentLevel, roiData, activeDevice) {
   const url = `http://${ip}:5000/control`;
-  const payload = { 
-    "acction":activeDevice?"start":"stop",
-    "roi": roiData,
-    "confidence_threshold": confidentLevel 
-  };  
-
+  // roiData is now guaranteed to be a JavaScript object/array because it's parsed before calling this function.
+  // So, we stringify it once for the device.
+  const payload = {
+    "action": activeDevice ? "start" : "stop",
+    "roi": roiData, // Pass the JavaScript object/array directly, axios will stringify it once.
+    "confidence_threshold": confidentLevel
+  };
+  // console.log("Sending parameters to device:", JSON.stringify(payload, null, 2));
   axios.post(url, payload)
     .then(response => {
-      console.log(response.data);
+      // console.log(response.data);
     })
     .catch(error => {
       console.error(error);

@@ -52,7 +52,7 @@ function buildZoneData(alarms) {
   const counts = alarms.reduce((acc, a) => {
     const zone = a.zone || "Unknown";
     const key = `${zone} / ${a.mcId || ""}`;
-    console.log(`Processing alarm for zone: ${zone}, machine: ${a.mcId}, key: ${key}`);
+    // console.log(`Processing alarm for zone: ${zone}, machine: ${a.mcId}, key: ${key}`);
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
@@ -67,8 +67,8 @@ function buildZoneData(alarms) {
     // ถ้าเป็น Admin/Engineer ดึงกลุ่ม Unassigned มาฟิกไว้บนสุด
     const unassigned = sorted.filter(item => item.zone.startsWith("Unassigned") || item.zone.startsWith("unassigned"));
     const others = sorted.filter(item => !item.zone.startsWith("Unassigned") && !item.zone.startsWith("unassigned"));
-    console.log("Unassigned zones:", unassigned);
-    console.log("Other zones:", others);
+    //console.log("Unassigned zones:", unassigned);
+    //console.log("Other zones:", others);
     return [...unassigned, ...others];
   } else {
     // ถ้าเป็น User ตัด Unassigned ทิ้งไปเลยไม่ให้แสดง
