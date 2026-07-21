@@ -1,0 +1,10 @@
+# Ignore uploaded files
+uploads/
+
+# Ignore local database files
+data/*.sqlite
+data/*.sqlite3
+
+# Ignore temporary files
+*.log
+*.tmp
