@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { StatusPill } from "../../components/ui/StatusBadge";
 import { cn } from "../../lib/utils";
 import { updateSettings } from '../../services/apiSetting'
-
+import { decodeToken } from "../../services/apiAuth";
 
 
 // ── Mock APIs ─────────────────────────────────────────────────────────────────
@@ -396,6 +396,9 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
   const ZONES        = ["Unassigned", "Zone A", "Zone B", "Zone C"];
   const isUnassigned = !device?.zone || device?.zone === "Unassigned";
 
+  // Get user role from token
+  const tokenData = decodeToken();
+  const userRole = tokenData?.role?.toLowerCase();
 
 
   useEffect(() => {
@@ -508,11 +511,11 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
         {/* 1. Device Identity */}
         <Section title="Device Identity" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-4 h-4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Device Name">
-              <Input value={form.deviceName} onChange={(v) => update("deviceName", v)} placeholder="e.g. Camera North Gate" />
+            <Field label="Device Name" hint={userRole === 'user' ? "Locked for user role" : ""}>
+              <Input value={form.deviceName} onChange={(v) => update("deviceName", v)} placeholder="e.g. Camera North Gate" disabled={userRole === 'user'} />
             </Field>
-            <Field label="Plant" hint={isUnassigned ? "Editable while device is Unassigned" : "Locked — assign back to Unassigned to change"}>
-              <Input value={form.plant} onChange={isUnassigned ? (v) => update("plant", v) : undefined} disabled={!isUnassigned} placeholder="e.g. Plant A" />
+            <Field label="Plant" hint={userRole === 'user' ? "Locked for user role" : (isUnassigned ? "Editable while device is Unassigned" : "Locked — assign back to Unassigned to change")}>
+              <Input value={form.plant} onChange={isUnassigned && userRole !== 'user' ? (v) => update("plant", v) : undefined} disabled={!isUnassigned || userRole === 'user'} placeholder="e.g. Plant A" />
             </Field>
             <Field label="IP Address" hint="Read-only — reported by device">
               <Input value={form.ip} disabled placeholder="192.168.1.xxx" />
@@ -531,13 +534,14 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
 
         {/* 2. Zone Assignment */}
         <Section title="Zone Assignment" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-4 h-4"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Zone" hint="Select an existing zone or type a new one">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5"> 
+            <Field label="Zone" hint={userRole === 'user' ? "Locked for user role" : "Select an existing zone or type a new one"}>
               <input
                 list="zone-list"
                 value={form.zone ?? ""}
                 onChange={(e) => update("zone", e.target.value)}
                 placeholder="Select or type zone..."
+                disabled={userRole === 'user'}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
               />
               <datalist id="zone-list">
