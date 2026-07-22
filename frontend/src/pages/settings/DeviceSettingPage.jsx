@@ -535,14 +535,23 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
         {/* 2. Zone Assignment */}
         <Section title="Zone Assignment" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-4 h-4"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5"> 
-            <Field label="Zone" hint={userRole === 'user' ? "Locked for user role" : "Select an existing zone or type a new one"}>
+            <Field 
+              label="Zone"
+              hint={
+                userRole === 'user'
+                  ? "Locked for user role"
+                  : (!form.plant || form.plant.toLowerCase() === 'unassigned'
+                    ? "Assign a Plant first before assigning a Zone"
+                    : "Select an existing zone or type a new one")
+              }
+            >
               <input
                 list="zone-list"
                 value={form.zone ?? ""}
                 onChange={(e) => update("zone", e.target.value)}
                 placeholder="Select or type zone..."
-                disabled={userRole === 'user'}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+                disabled={userRole === 'user' || !form.plant || form.plant.toLowerCase() === 'unassigned'}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-gray-50 disabled:text-gray-400 bg-white"
               />
               <datalist id="zone-list">
                 {ZONES.map((z) => (
