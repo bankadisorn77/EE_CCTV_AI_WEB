@@ -63,3 +63,35 @@ export const LoadingIcon = () => (
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
   </svg>
 );
+
+export const CpuTempIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4 4 0 1 0 5 0z" />
+  </svg>
+);
+
+export const GpuTempIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4 4 0 1 0 5 0z" />
+  </svg>
+);
+
+export const MemUsedIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <rect x="2" y="7" width="20" height="10" rx="1" />
+    <path d="M7 17v-2" />
+    <path d="M12 17v-2" />
+    <path d="M17 17v-2" />
+    <line x1="4" y1="12" x2="18" y2="12" strokeWidth="3" />
+  </svg>
+);
+
+export const MemFreeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <rect x="2" y="7" width="20" height="10" rx="1" />
+    <path d="M7 17v-2" />
+    <path d="M12 17v-2" />
+    <path d="M17 17v-2" />
+    <line x1="4" y1="12" x2="8" y2="12" strokeWidth="3" />
+  </svg>
+);

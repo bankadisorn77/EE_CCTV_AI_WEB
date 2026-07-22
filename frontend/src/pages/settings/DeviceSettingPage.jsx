@@ -96,10 +96,10 @@ function Input({ value, onChange, placeholder, disabled, type = "text", ...props
 
 const DeviceStatusCards = memo(function DeviceStatusCards({ status }) {
   const items = [
-    { label: "CPU Temp", value: status.cpuTemp != null ? `${status.cpuTemp}°C` : "—", icon: "🌡️" },
-    { label: "GPU Temp", value: status.gpuTemp != null ? `${status.gpuTemp}°C` : "—", icon: "🎮" },
+    { label: "CPU Temp", value: status.cpuTemp != null ? `${status.cpuTemp}°C` : "—", icon: "🔲" },
+    { label: "GPU Temp", value: status.gpuTemp != null ? `${status.gpuTemp}°C` : "—", icon: "🤖" },
     { label: "Mem Free", value: status.memoryFree != null ? `${status.memoryFree} MB` : "—", icon: "💾" },
-    { label: "Mem Used", value: status.memoryUsed != null ? `${status.memoryUsed} MB` : "—", icon: "📊" },
+    { label: "Mem Used", value: status.memoryUsed != null ? `${status.memoryUsed} MB` : "—", icon: "🗃️"},
   ];
 
   return (

@@ -64,13 +64,13 @@ export default function MachinePage({ zoneId, machineId }) {
   const { markRead } = useNotifications();
   const currentRole = decodeToken()?.role?.toLowerCase();
   const canClearFalseAlarms = ["admin", "engineer"].includes(currentRole);
-
+ 
   // When user selects an alarm, mark it read in the global context
-  function selectAlarm(alarm) {
+  const selectAlarm = useCallback((alarm) => {
     setSelectedAlarm(alarm);
     setActiveImage(0);
     if (alarm?.id) markRead(alarm.id);
-  }
+  }, [markRead]);
 
   // Handle "Jump to Alarm" from toast — prepend new alarm and select it
   function handleJumpToAlarm(newAlarm) {
@@ -117,25 +117,28 @@ export default function MachinePage({ zoneId, machineId }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedIndex, alarms]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setPage(1);
-    setSelectedAlarm(null);
-    setActiveImage(0);
+  const load = useCallback(async (options = { background: false }) => {
+    if (!options.background) {
+      setLoading(true);
+      setPage(1);
+      setSelectedAlarm(null);
+      setActiveImage(0);
+    }
 
     try {
       const data = await fetchMachineAlarms(machineId);
       if (cancelledRef.current) return;
 
       setAlarms(data);
-      setSelectedAlarm((prev) => {
-        if (!prev) return data[0] ?? null;
-        return data.find((a) => String(a.id) === String(prev.id)) || prev;
-      });
+      if (!options.background) {
+        selectAlarm(data[0] ?? null);
+      }
     } finally {
-      if (!cancelledRef.current) setLoading(false);
+      if (!options.background && !cancelledRef.current) {
+        setLoading(false);
+      }
     }
-  }, [machineId]);
+  }, [machineId, selectAlarm]);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -155,7 +158,7 @@ export default function MachinePage({ zoneId, machineId }) {
       socket.on('new-alarm', (data) => {
         if (String(data.alarm.mcId) === String(machineId)) {
           if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-          loadTimeoutRef.current = setTimeout(() => load(), 500);
+          loadTimeoutRef.current = setTimeout(() => load({ background: true }), 500);
         }
       });
 

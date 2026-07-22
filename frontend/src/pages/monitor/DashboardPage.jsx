@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   AreaChart, Area,
   BarChart, Bar,
@@ -139,6 +139,7 @@ const ZONE_COLORS=["#ef4444","#f97316","#f59e0b","#6366f1","#3b82f6"];
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function DashboardPage(){
+  const [monitoringStatus, setMonitoringStatus] = useState("off");
   const [stats,setStats]=useState(null);
   const [alarms,setAlarms]=useState([]);
   const [trendData,setTrendData]=useState([]);
@@ -150,112 +151,113 @@ export default function DashboardPage(){
   const [loadingCharts,setLoadingCharts]=useState(true);
   const [filterStatus,setFilterStatus]=useState("All");
   const socketRef = useRef(null);
+  const cancelledRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    let loadTimeout = null;
+  // Helper: update device count stats
+  const updateStatsFromDevices = useCallback((devices) => {
+    const tokenData = decodeToken();
+    const role = tokenData?.role;
+    const userPlant = tokenData?.plant;
+    const plant = role === 'admin' ? 'ALL' : (userPlant || devices[0]?.plant || "—");
+    const totalMachine = devices.length;
+    const activeMachine = devices.filter((d) => d.runningStatus === "active").length;
+    const inactiveMachine = totalMachine - activeMachine;
 
-    // Full load: devices + alarms + charts
-    async function load() {
+    setStats((prev) => ({
+      ...(prev || {}),
+      plant,
+      totalMachine,
+      activeMachine,
+      inactiveMachine,
+    }));
+
+    // Join rooms based on role (only once)
+    if (socketRef.current && !socketRef.current.hasJoined) {
+      socketRef.current.hasJoined = true;
+      if (role === 'admin') {
+        socketRef.current.emit('join-plant', 'ALL');
+      } else {
+        if (userPlant) socketRef.current.emit('join-plant', userPlant);
+        if (role === 'engineer') socketRef.current.emit('join-plant', 'Unassigned', 'unassigned');
+      }
+    }
+  }, []);
+
+  // Full load: devices + alarms + charts
+  const load = useCallback(async (options = { background: false }) => {
+    if (!options.background) {
       setLoadingStats(true);
       setLoadingAlarms(true);
       setLoadingCharts(true);
+    }
 
-      try {
-        const devices = await fetchDevices();
-        if (!cancelled) {
-          updateStatsFromDevices(devices);
-        }
-      } catch {
-        if (!cancelled) setStats(null);
-      } finally {
-        if (!cancelled) setLoadingStats(false);
-      }
-
-      try {
-        const alarms = await fetchAlarms();
-        if (!cancelled) {
-          const sortedAlarms = [...alarms].sort((a, b) => {
-            const tA = new Date(a.timestamp || a.createdAt).getTime();
-            const tB = new Date(b.timestamp || b.createdAt).getTime();
-            return tB - tA;
-          });
-
-          setAlarms(sortedAlarms);
-          const trend = buildTrendData(sortedAlarms);
-          const types = buildTypeData(sortedAlarms);
-          const zones = buildZoneData(sortedAlarms);
-          const inspection = buildInspectionRate(sortedAlarms);
-
-          setTrendData(trend);
-          setTypeData(types);
-          setZoneData(zones);
-          setInspectionRate(inspection);
-
-          setStats((prev) => ({
-            ...(prev || {}),
-            allAlarm: inspection.total,
-            uninspectedAlarm: inspection.uninspected,
-            falseAlarm: inspection.falseAlarm,
-          }));
-        }
-      } catch {
-        if (!cancelled) {
-          setAlarms([]);
-          setTrendData([]);
-          setTypeData([]);
-          setZoneData([]);
-          setInspectionRate(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingAlarms(false);
-          setLoadingCharts(false);
-        }
+    try {
+      const devices = await fetchDevices();
+      if (cancelledRef.current) return;
+      updateStatsFromDevices(devices);
+    } catch {
+      if (cancelledRef.current) return;
+      setStats(null);
+    } finally {
+      if (!options.background && !cancelledRef.current) {
+        setLoadingStats(false);
       }
     }
 
-    // Fast update: only device count (active/inactive) - no alarm reload
-    async function updateStats() {
-      try {
-        const devices = await fetchDevices();
-        if (!cancelled) {
-          updateStatsFromDevices(devices);
-        }
-      } catch {
-        // Silently fail
-      }
-    }
+    try {
+      const alarmsData = await fetchAlarms();
+      if (cancelledRef.current) return;
+      const sortedAlarms = [...alarmsData].sort((a, b) => {
+        const tA = new Date(a.timestamp || a.createdAt).getTime();
+        const tB = new Date(b.timestamp || b.createdAt).getTime();
+        return tB - tA;
+      });
 
-    // Helper: update device count stats
-    function updateStatsFromDevices(devices) {
-      const tokenData = decodeToken();
-      const role = tokenData?.role;
-      const userPlant = tokenData?.plant;
-      const plant = role === 'admin' ? 'ALL' : (userPlant || devices[0]?.plant || "—");
-      const totalMachine = devices.length;
-      const activeMachine = devices.filter((d) => d.runningStatus === "active").length;
-      const inactiveMachine = totalMachine - activeMachine;
+      setAlarms(sortedAlarms);
+      const trend = buildTrendData(sortedAlarms);
+      const types = buildTypeData(sortedAlarms);
+      const zones = buildZoneData(sortedAlarms);
+      const inspection = buildInspectionRate(sortedAlarms);
+
+      setTrendData(trend);
+      setTypeData(types);
+      setZoneData(zones);
+      setInspectionRate(inspection);
 
       setStats((prev) => ({
         ...(prev || {}),
-        plant,
-        totalMachine,
-        activeMachine,
-        inactiveMachine,
+        allAlarm: inspection.total,
+        uninspectedAlarm: inspection.uninspected,
+        falseAlarm: inspection.falseAlarm,
       }));
-
-      // Join rooms based on role (only once)
-      if (socketRef.current && !socketRef.current.hasJoined) {
-        socketRef.current.hasJoined = true;
-        if (role === 'admin') {
-          socketRef.current.emit('join-plant', 'ALL');
-        } else {
-          if (userPlant) socketRef.current.emit('join-plant', userPlant);
-          if (role === 'engineer') socketRef.current.emit('join-plant', 'Unassigned', 'unassigned');
-        }
+    } catch {
+      if (cancelledRef.current) return;
+      setAlarms([]);
+      setTrendData([]);
+      setTypeData([]);
+      setZoneData([]);
+      setInspectionRate(null);
+    } finally {
+      if (!options.background && !cancelledRef.current) {
+        setLoadingAlarms(false);
+        setLoadingCharts(false);
       }
     }
+  }, [updateStatsFromDevices]);
+
+  // Fast update: only device count (active/inactive) - no alarm reload
+  const updateStats = useCallback(async () => {
+    try {
+      const devices = await fetchDevices();
+      if (cancelledRef.current) return;
+      updateStatsFromDevices(devices);
+    } catch {
+      // Silently fail
+    }
+  }, [updateStatsFromDevices]);
+
+  useEffect(() => {
+    cancelledRef.current = false;
 
     // Setup socket connection once
     function initSocket() {
@@ -273,9 +275,9 @@ export default function DashboardPage(){
 
       socket.on('new-alarm', () => {
         // Full reload on new alarm (includes charts, stats, alarms)
-        if (loadTimeout) clearTimeout(loadTimeout);
-        loadTimeout = setTimeout(load, 1000);
-        // console.log("new alarm");
+        // if(monitoringStatus === "off") return;
+        //   if (loadTimeout) clearTimeout(loadTimeout);
+        //   loadTimeout = setTimeout(load, 1000);
       });
 
       socket.on('device-status', () => {
@@ -289,11 +291,22 @@ export default function DashboardPage(){
     initSocket();
 
     return () => {
-      cancelled = true;
-      if (loadTimeout) clearTimeout(loadTimeout);
+      cancelledRef.current = true;
       socketRef.current?.disconnect();
     };
-  }, []);
+  }, [load, updateStats]);
+
+  useEffect(() => {
+    if (monitoringStatus === 'off' || typeof monitoringStatus !== 'number') {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      load({ background: true });
+    }, monitoringStatus * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [monitoringStatus, load]);
 
   // const cards=stats?statCards(stats):[];
   // const filteredAlarms=filterStatus==="All"?alarms:alarms.filter((a)=>a.status===filterStatus);
@@ -312,9 +325,48 @@ export default function DashboardPage(){
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Live overview of all machines and alarm activity</p>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 items-center ">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Live overview of all machines and alarm activity</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 pl-2 text-xs font-medium text-gray-400">
+              <icon className="w-3.5 h-3.5 text-blue-400 animate-spin-slow" />
+              <span>Auto Refresh</span>
+            </div>
+            <div className="flex items-center bg-gray-200 p-1 rounded-lg ">
+              {[
+                { label: 'OFF', val: 'off' },
+                { label: '5s', val: 5 },
+                { label: '30s', val: 30 },
+                { label: '1m', val: 60 },
+                { label: '5m', val: 300 },
+              ].map((opt) => {
+                const isActive = monitoringStatus === opt.val;
+                return (
+                  <button
+                    key={opt.val}
+                    onClick={() => setMonitoringStatus(opt.val)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all duration-150 ml-0.5 ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-blue-500/30 scale-105'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+            onClick={() => load()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-medium rounded-lg transition-all shadow-sm group"
+            title="Manual Refresh"
+          >
+            <span>Refresh</span>
+          </button>
+          </div>
         </div>
 
         {/* Stat cards */}

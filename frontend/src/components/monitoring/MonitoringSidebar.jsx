@@ -130,11 +130,13 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
         </span>
         <span className="text-xs font-bold tracking-widest uppercase text-gray-400">Monitoring</span>
+
         {/* {unreadCount > 0 && (
           <span className="ml-auto min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )} */}
+          
       </div>
 
       {/* Nav */}
