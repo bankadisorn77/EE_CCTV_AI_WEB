@@ -212,7 +212,50 @@ function sendParameterstoDevice(ip, confidentLevel, roiData, activeDevice) {
       console.error(error);
     });
 }
+router.delete('/reset/:mcId', verifyToken, async (req, res) => {
+  try {
+    const { mcId } = req.params;
+    const device = await Device.findByPk(mcId);
+    if (!device) {
+      return res.status(404).json({ message: "Device not found" });
+    }
 
+    const deviceUrl = device.ip;
+    try {
+      await axios.post(`http://${deviceUrl}:5000/reset`, {}, { timeout: 5000 });
+    } catch (axiosError) {
+      console.error(`Failed to trigger reset on device ${mcId}:`, axiosError.message);
+      return res.status(502).json({ 
+        error: "Failed to communicate with device hardware",
+        details: axiosError.message 
+      });
+    }
+    await device.destroy();
+    return res.status(200).json({ 
+      success: true, 
+      message: `Device ${mcId} has been successfully reset and removed.` 
+    });
 
+  } catch (error) {
+    console.error("Internal Server Error:", error);
+    return res.status(500).json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+router.post('/restart/:mcId', verifyToken, async (req, res) => {
+  try {
+    const device = await Device.findByPk(req.params.mcId);
+    const device_URL = device.ip;
+    axios.post(`http://${device_URL}:5000/restart`)
+    .then(response => {
+      console.log(response.data);
+      res.status(200).json(response.data);
+    }).catch(error => {
+      res.status(500).json({ error: error.message });
+    });
+  }catch{
+    res.status(500).json({ error: err.message });
+  }
+})
 
 module.exports = router;
