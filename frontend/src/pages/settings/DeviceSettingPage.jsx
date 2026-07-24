@@ -408,6 +408,18 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
     }
   }, [device?.mcId]);
 
+  // This hook and its dependencies are moved before the early return to fix the "Rules of Hooks" error.
+  // It ensures hooks are called in the same order on every render.
+  const headerStatus = liveStatus?.runningStatus ?? form?.runningStatus;
+  const isDeviceInactive = headerStatus === 'inactive';
+
+  useEffect(() => {
+    // If device is inactive, force the 'Active Device' switch to OFF
+    if (isDeviceInactive && form?.activeDevice) {
+      setForm(p => ({ ...p, activeDevice: false }));
+    }
+  }, [isDeviceInactive, form?.activeDevice]);
+
   function update(key, value) { setForm((p) => ({ ...p, [key]: value })); setDirty(true); setSaved(false); }
   function updateCam(i, updated) 
   {  
@@ -457,8 +469,6 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
 
   const confidentLevel  = form.confidentLevel ?? 0.7;
   const saveState  = getSaveState(saved, dirty);
-  const headerStatus = liveStatus?.runningStatus ?? form.runningStatus;
-
   const SaveIcon = saving
     ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4}/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
     : saved
@@ -571,14 +581,21 @@ export default function DeviceSettingsPanel({ device, onSaved, liveStatus = null
             <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-gray-50 gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-gray-700">Active Device</p>
-                <p className="text-xs text-gray-400 mt-0.5">Enable or disable alarm sending</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {isDeviceInactive
+                    ? "Device is inactive and cannot be activated."
+                    : "Enable or disable alarm sending"}
+                </p>
               </div>
               <button
                 onClick={() => update("activeDevice", !form.activeDevice)}
+                disabled={isDeviceInactive}
                 role="switch"
                 aria-checked={form.activeDevice}
-                className={cn("relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-emerald-400", form.activeDevice ? "bg-emerald-500" : "bg-gray-300")}
-              >
+                className={cn("relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-emerald-400",
+                  form.activeDevice ? "bg-emerald-500" : "bg-gray-300",
+                  isDeviceInactive && "opacity-50 cursor-not-allowed"
+                )}>
                 <span className={cn("absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200", form.activeDevice ? "translate-x-5" : "translate-x-0")} />
               </button>
             </div>

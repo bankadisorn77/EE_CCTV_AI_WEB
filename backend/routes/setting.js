@@ -78,13 +78,12 @@ router.put('/:mcId', verifyToken, async (req, res) => {
           ip,
         } = req.body;
         const targetPlant = req.body.plant?.toLowerCase();
-        console.log("Received request to update device settings:", req.body);
-        // console.log(`Debug: ActiveDevice: ${targetActiveDevice}`)
+        // console.log("Received request to update device settings:", req.body);
   try {
     const device = await Device.findByPk(req.params.mcId);
     if (!device) return res.status(404).json({ error: "Device not found" });
     // console.log(`Debug: ActiveDevice before update: ${device.activeDevice}`)
-    // --- ตรวจสอบสิทธิ์ (Permission Check) ---
+    // --- Permission Check ---
     const roiDataForProcessing = roiData; // Assume express.json() has already parsed it into an object/array
 
     // [CASE ADMIN]: Full Access

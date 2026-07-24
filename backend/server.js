@@ -115,7 +115,6 @@ io.on('connection', (socket) => {
             memoryFree: device.memoryFree,
             memoryUsed: device.memoryUsed,
           };
-          console.log('Device disconnected:\n', payload);
           io.to(device.plant).emit('device-status', payload);
           io.to('ALL').emit('device-status', payload);
         }

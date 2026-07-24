@@ -13,4 +13,3 @@ export const updateSettings = async (mcId,payload) => {
     // console.log(payload)
     return response.data;   
 }
-
