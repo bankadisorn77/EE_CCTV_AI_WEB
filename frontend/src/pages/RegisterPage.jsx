@@ -42,7 +42,7 @@ export default function RegisterPage() {
 
       await Swal.fire({
         icon: 'success',
-        title: 'สร้างบัญชีสำเร็จ',
+        title: 'Create user successfully',
         timer: 1500,
         showConfirmButton: false,
         timerProgressBar: true,

@@ -74,7 +74,7 @@ router.post('/register', verifyToken, async (req, res) => {
     // 1. ถ้าเป็น ADMIN: สร้างได้ทุกอย่าง (Admin, Engineer, User) ในทุก Plant
     
     if (rRole === 'admin') {
-      await User.create({ en, password: password, role: tRole, plant: tPlant, accessibleZones: 'ALL' });
+      await User.create({ en, password: password, role: tRole, plant: tRole === 'admin' ? 'ALL' : tPlant, accessibleZones: 'ALL' });
       return res.status(201).json({ message: "Admin created user successfully" });
     }
 

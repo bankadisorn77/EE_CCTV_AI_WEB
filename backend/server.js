@@ -17,6 +17,7 @@ const authRoutes = require('./routes/auth');
 const deviceRoutes = require('./routes/device');
 const monitorRoutes = require('./routes/monitor');
 const settingRoutes = require('./routes/setting');
+const userRoutes = require('./routes/user');
 // const parameterRoutes = require('./routes/parameter');
 
 
@@ -136,6 +137,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/device', deviceRoutes);
 app.use('/api/monitor', monitorRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/users', userRoutes);
 // app.use('/api/parameters', parameterRoutes);
 
 

@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { label: "Monitoring", href: "/monitoring"  },
   { label: "Settings",   href: "/settings"    },
   { label: "Register",   href: "/register"    },
+  { label: "User Management", href: "/users", adminOnly: true },
 ];
 
 // ── Variant maps ──────────────────────────────────────────────────────────────
@@ -55,9 +56,11 @@ export default function Navbar() {
     navigate("/login");
   }
 
-  const visibleLinks = NAV_LINKS.filter(({ label }) =>
-    label !== "Register" || (tokenDetails?.role !== "user")
-  );
+  const visibleLinks = NAV_LINKS.filter(({ label, adminOnly }) => {
+    if (adminOnly) return tokenDetails?.role === 'admin';
+    if (label === "Register") return tokenDetails?.role !== "user";
+    return true;
+  });
 
   return (
     <nav className={cn(
@@ -74,10 +77,7 @@ export default function Navbar() {
 
         {/* Desktop links */}
         <ul className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.filter(({ label }) => {
-            if (label !== "Register") return true;
-            return tokenDetails && tokenDetails.role !== "user";
-          }).map(({ label, href }) => (
+          {visibleLinks.map(({ label, href }) => (
             <li key={label}>
                 <Link
                 to={href}
@@ -112,38 +112,6 @@ export default function Navbar() {
       </div>
 
       {/* Mobile menu */}
-
-          <div className={cn(
-            "md:hidden overflow-hidden transition-all duration-300 ease-in-out bg-white border-t border-gray-100",
-            menuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-          )}>
-          <div className="px-4 py-4 flex flex-col gap-1">
-            {NAV_LINKS.filter(({ label }) => {
-              if (label !== "Register") return true;
-              return tokenDetails && tokenDetails.role !== "user";
-            }).map(({ label, href }) => (
-                <Link
-                  key={label}
-                  to={href}
-                  onClick={() => setMenuOpen(false)}
-                  className={cn("px-4 py-3 rounded-lg text-sm font-medium transition-colors", mobileLinkVariants[active === label ? "active" : "inactive"])}
-                >
-                {label}
-              </Link>
-            ))}
-
-            <button
-              className="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-3 rounded-lg transition-colors"
-              onClick={() => checkLogin()}
-            >
-              {loginstatus ? "Logout" : "Login"}
-            </button>
-          </div>
-        </div>
-
-
-
-
 
       <div className={cn(
         "md:hidden overflow-hidden transition-all duration-300 ease-in-out bg-white border-t border-gray-100",

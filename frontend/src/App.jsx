@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { getToken } from "./services/apiAuth"
+import { getToken, decodeToken } from "./services/apiAuth"
 
 import MainLayout from './components/layout/MainLayout'
 
 import HomePage from "./pages/HomePage"
 import LoginPage from "./pages/LoginPage"
 import RegisterPage from "./pages/RegisterPage"
+import UserManagementPage from "./pages/UserManagementPage"
 import MonitorPage from "./pages/monitor/MonitorPage"
 import SettingsPage from "./pages/settings/SettingPage"
 
@@ -24,6 +25,18 @@ function ProtectedRoute() {
 function PublicRoute() {
   const token = getToken()
   return !token ? <Outlet /> : <Navigate to="/" replace />
+}
+
+/* Admin */
+function AdminRoute() {
+  const token = getToken();
+  const tokenData = decodeToken();
+  const isAdmin = tokenData?.role?.toLowerCase() === 'admin';
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return isAdmin ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 const WS_URL = "ws://your-server.com/ws";
@@ -47,25 +60,16 @@ function AppContent() {
       <TokenExpiredDialog />
       <Routes>
 
-        {/* Normal Pages */}
-        <Route element={<MainLayout />}>
-          <Route element={<ProtectedRoute />}>
+        {/* Protected routes with MainLayout */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/register" element={<RegisterPage />} />
-          </Route>
-        </Route>
-
-        {/* Monitoring Section (has Sidebar) */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<MainLayout />}>
             <Route path="/monitoring" element={<MonitorPage />} />
-          </Route>
-        </Route>
-
-        {/* Settings Page */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<MainLayout />}>
             <Route path="/settings" element={<SettingsPage />} />
+            <Route element={<AdminRoute />}>
+              <Route path="/users" element={<UserManagementPage />} />
+            </Route>
           </Route>
         </Route>
 
