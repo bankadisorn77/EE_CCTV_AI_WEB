@@ -273,11 +273,15 @@ export default function DashboardPage(){
         // console.log("connected");
       });
 
+      let loadTimeout = null;
       socket.on('new-alarm', () => {
         // Full reload on new alarm (includes charts, stats, alarms)
-        // if(monitoringStatus === "off") return;
-        //   if (loadTimeout) clearTimeout(loadTimeout);
-        //   loadTimeout = setTimeout(load, 1000);
+        if (loadTimeout) clearTimeout(loadTimeout);
+        loadTimeout = setTimeout(() => {
+          load({ background: true });
+          // Notify sidebar to also update its uninspected count
+          window.dispatchEvent(new CustomEvent('new-alarm-received'));
+        }, 1000); // Debounce to prevent spamming reloads
       });
 
       socket.on('device-status', () => {

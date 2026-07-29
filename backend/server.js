@@ -163,6 +163,7 @@ sequelize.sync().then(async () => {
   }
 
   // รีเซ็ตสถานะเครื่องทั้งหมดให้เป็น inactive เมื่อเซิร์ฟเวอร์เพิ่งเริ่มทำงาน
+  
   await Device.update({ runningStatus: 'inactive' }, { where: {} });
 
   const port = process.env.PORT || 3000;

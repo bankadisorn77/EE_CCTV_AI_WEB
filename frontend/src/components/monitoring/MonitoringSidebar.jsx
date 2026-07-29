@@ -1,13 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNotifications } from "../../context/NotificationContext";
 import { DashboardIcon, ZoneIcon, MachineIcon, ChevronIcon, LoadingIcon } from "../ui/Icons";
 import { Badge } from "../ui/StatusBadge";
 import { cn } from "../../lib/utils";
-import { fetchDevices } from "../../services/monitor";
+import { fetchDevices, fetchAlarms } from "../../services/monitor";
 import { decodeToken } from "../../services/apiAuth";
 
-function buildZones(devices, role) {
+function buildZones(devices, alarms, role) {
   const zonesMap = new Map();
+
+  // นับจำนวน alarm ที่ยังไม่ได้ตรวจสอบสำหรับแต่ละเครื่อง
+  const uninspectedCounts = alarms.reduce((acc, alarm) => {
+    if (alarm.status === 'Uninspected' || !alarm.status) {
+      acc[alarm.mcId] = (acc[alarm.mcId] || 0) + 1;
+    }
+    return acc;
+  }, {});
 
   // บังคับสร้างโซน Unassigned เตรียมไว้เสมอ เฉพาะ Admin/Engineer เท่านั้น
   if (role === "admin" || role === "engineer") {
@@ -17,13 +25,16 @@ function buildZones(devices, role) {
   devices.forEach((d) => {
     const zoneId = d.zone || "Unassigned";
     const zoneLabel = d.zone || "Unassigned";
-    const machineId = d.mcId;
-    const machineLabel = d.deviceName || d.mcId;
 
     if (!zonesMap.has(zoneId)) {
       zonesMap.set(zoneId, { id: zoneId, label: zoneLabel, machines: [] });
     }
-    zonesMap.get(zoneId).machines.push({ id: machineId, label: machineLabel });
+    zonesMap.get(zoneId).machines.push({
+      ...d,
+      id: d.mcId,
+      label: d.deviceName || d.mcId,
+      uninspected: uninspectedCounts[d.mcId] || 0,
+    });
   });
 
   const unassignedZone = zonesMap.get("Unassigned");
@@ -63,7 +74,7 @@ const machineDotVariants = {
 };
 
 const machineIconVariants = {
-  active:   "text-indigo-400",
+  active:   "text-gre-400",
   inactive: "text-gray-300",
 };
 
@@ -73,6 +84,7 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [openZones, setOpenZones] = useState({});
+  const reloadTimeoutRef = useRef(null);
 
   const { unreadAlarms, unreadCount } = useNotifications();
 
@@ -87,32 +99,60 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
     return acc;
   }, {});
 
-  useEffect(() => {
-    setLoading(true);
-
+  const loadData = useCallback((isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+    
     const tokenData = decodeToken();
     const role = tokenData?.role;
     const userPlant = tokenData?.plant;
 
-    fetchDevices()
-      .then((devices) => {
-        // กรองเครื่องจักรให้ตรงกับ Plant ของ User (ถ้าไม่ใช่ Admin/Engineer)
+    Promise.all([fetchDevices(), fetchAlarms()])
+      .then(([devices, alarms]) => {
         let displayDevices;
         if (role === 'admin') {
-          displayDevices = devices; // Admin sees all
+          displayDevices = devices;
         } else if (role === 'engineer') {
-          displayDevices = devices.filter(d => d.plant === userPlant || d.plant === 'Unassigned' || d.plant === 'unassigned'); // Engineer sees own plant + Unassigned
+          displayDevices = devices.filter(d => d.plant === userPlant || !d.plant || d.plant === 'Unassigned' || d.plant === 'unassigned');
         } else {
-          displayDevices = devices.filter(d => d.plant === userPlant && d.plant !== 'Unassigned'); // User sees own plant only
+          displayDevices = devices.filter(d => d.plant === userPlant && d.plant !== 'Unassigned' && d.plant !== 'unassigned');
         }
 
-        const data = buildZones(displayDevices, role);
+        const data = buildZones(displayDevices, alarms, role);
         setZones(data);
-        if (data.length > 0) setOpenZones({ [data[0].id]: true });
+        if (isInitialLoad && data.length > 0) {
+          setOpenZones({ [data[0].id]: true });
+        }
       })
       .catch(() => setError("Failed to load zones."))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (isInitialLoad) setLoading(false);
+      });
   }, []);
+
+  useEffect(() => {
+    loadData(true); // Initial load
+
+    // Debounced handler to reload data for the sidebar
+    const handleDataUpdate = () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
+      reloadTimeoutRef.current = setTimeout(() => {
+        loadData(); // Reloads data without showing the main loading spinner
+      }, 500); // Debounce for 500ms
+    };
+
+    window.addEventListener('alarm-status-updated', handleDataUpdate);
+    window.addEventListener('new-alarm-received', handleDataUpdate); // Listen for new alarms
+
+    return () => {
+      window.removeEventListener('alarm-status-updated', handleDataUpdate);
+      window.removeEventListener('new-alarm-received', handleDataUpdate);
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+    };
+  }, [loadData]);
 
   function toggleZone(zoneId) {
     setOpenZones((prev) => ({ ...prev, [zoneId]: !prev[zoneId] }));
@@ -211,6 +251,11 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
                           <MachineIcon />
                         </span>
                         <span className="flex-1 truncate">{mc.label}</span>
+                        <span className="flex items-center gap-1">
+                          {mc.uninspected > 0 && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700" title={`${mc.uninspected} uninspected items`}>{ mc.uninspected > 99 ? "99+" : mc.uninspected}</span>
+                          )}
+                        </span>
                         <Badge count={mcUnread} />
                       </button>
                     );

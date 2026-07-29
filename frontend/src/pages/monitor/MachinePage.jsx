@@ -72,6 +72,13 @@ export default function MachinePage({ zoneId, machineId }) {
     if (alarm?.id) markRead(alarm.id);
   }, [markRead]);
 
+  // Helper function to sort alarms by newest timestamp
+  const sortAlarms = (alarmArray) => {
+    alarmArray.sort((a, b) => {
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+    return alarmArray;
+  };
   // Handle "Jump to Alarm" from toast — prepend new alarm and select it
   function handleJumpToAlarm(newAlarm) {
     setAlarms((prev) => {
@@ -92,7 +99,7 @@ export default function MachinePage({ zoneId, machineId }) {
         images: newAlarm.image, // will load when API supports it
       };
       selectAlarm(full);
-      return [full, ...prev];
+      return sortAlarms([full, ...prev]);
     });
     setPage(1);
   }
@@ -129,9 +136,9 @@ export default function MachinePage({ zoneId, machineId }) {
       const data = await fetchMachineAlarms(machineId);
       if (cancelledRef.current) return;
 
-      setAlarms(data);
+      setAlarms(sortAlarms(data));
       if (!options.background) {
-        selectAlarm(data[0] ?? null);
+        selectAlarm(data[0] ?? null); // data is now sorted in-place
       }
     } finally {
       if (!options.background && !cancelledRef.current) {
@@ -156,10 +163,13 @@ export default function MachinePage({ zoneId, machineId }) {
       });
 
       socket.on('new-alarm', (data) => {
-        if (String(data.alarm.mcId) === String(machineId)) {
+        // If the new alarm is for the currently viewed machine, reload this page's data
+        if (data?.alarm && String(data.alarm.mcId) === String(machineId)) {
           if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
           loadTimeoutRef.current = setTimeout(() => load({ background: true }), 500);
         }
+        // Always notify other components (like the sidebar) that a new alarm has arrived
+        window.dispatchEvent(new CustomEvent('new-alarm-received'));
       });
 
       socketRef.current = socket;
@@ -200,13 +210,18 @@ export default function MachinePage({ zoneId, machineId }) {
       await updateAlarmStatus(alarmId, newStatus);
 
       // 2. ถ้า API ทำงานสำเร็จ ค่อยมาอัปเดตหน้าตาเว็บ (State)
-      setAlarms((prev) =>
-        prev.map((a) => a.id === alarmId ? { ...a, status: newStatus } : a)
+      setAlarms((prev) => 
+        // Re-sort after updating status, as "Uninspected" items should no longer be at the top
+        sortAlarms(prev.map((a) => a.id === alarmId ? { ...a, status: newStatus } : a))
       );
 
       if (selectedAlarm?.id === alarmId) {
         setSelectedAlarm((prev) => ({ ...prev, status: newStatus }));
       }
+
+      // Notify other components (like the sidebar) to re-fetch data
+      window.dispatchEvent(new CustomEvent('alarm-status-updated'));
+
     } catch (error) {
       // 3. ดักจับ Error เผื่อเซิร์ฟเวอร์มีปัญหา
       console.error("Failed to update alarm status:", error);

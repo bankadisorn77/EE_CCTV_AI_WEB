@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { Device, Alarm } = require('../models');
 const { verifyApiKey } = require('../middleware/auth');
 const sharp = require('sharp');
+const { log } = require('console');
 router.get('/check-api-key', verifyApiKey, (req, res) => {
   res.status(200).json({ success: true });
 });
@@ -51,6 +52,58 @@ router.post('/register', async (req, res) => {
     // กรณี MAC Address ซ้ำ (เพราะเราตั้ง unique: true ไว้ใน Model)
     console.log(err);
     res.status(400).json({ error: "Device already registered or error occurred" });
+  }
+});
+
+router.post('/re-captureImage', verifyApiKey, async (req, res) => {
+  try {
+    const mcId = req.device?.mcId;
+    const { frame } = req.body;
+    console.log(`try to re-capture image for ${mcId}`)
+
+    if (!mcId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing machine ID (mcId)' 
+      });
+    }
+
+    if (frame) {
+      for (let i = 1; i <= 4; i++) {
+        if (frame[`cam${i}`]) {
+          const base64Data = frame[`cam${i}`].replace(/^data:image\/\w+;base64,/, "");
+          const fileName = `device_${mcId}_cam${i}.jpg`;
+          const fullPath = path.join(__dirname, '../uploads', fileName);
+          await fs.promises.writeFile(fullPath, base64Data, 'base64');
+        }
+      }
+    }
+
+    
+    const updatedData = {
+      cam1: `device_${mcId}_cam1.jpg`,
+      cam2: `device_${mcId}_cam2.jpg`,
+      cam3: `device_${mcId}_cam3.jpg`,
+      cam4: `device_${mcId}_cam4.jpg`,
+    };
+
+    await Device.update(updatedData, {
+      where: { mcId: mcId }
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Images updated successfully',
+      data: updatedData
+    });
+
+  } catch (error) {
+    console.error('Re-capture image error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: error.message 
+    });
   }
 });
 
