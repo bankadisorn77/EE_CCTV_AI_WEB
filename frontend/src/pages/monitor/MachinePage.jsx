@@ -158,8 +158,19 @@ export default function MachinePage({ zoneId, machineId }) {
 
       socket.on('connect', () => {
         load();
-        socket.emit('join-plant', 'ALL');
-        console.log("Connected and Joined Room");
+        // console.log("MachinePage: Connected to WebSocket");
+        const tokenData = decodeToken();
+        if (tokenData) {
+          const role = tokenData.role;
+          const plantName = tokenData.plant;
+
+          if (role === "admin") {
+            socket.emit("join-plant", "ALL");
+          } else {
+            if (plantName) socket.emit("join-plant", plantName);
+            if (role === "engineer") socket.emit("join-plant", "Unassigned");
+          }
+        }
       });
 
       socket.on('new-alarm', (data) => {
@@ -170,6 +181,16 @@ export default function MachinePage({ zoneId, machineId }) {
         }
         // Always notify other components (like the sidebar) that a new alarm has arrived
         window.dispatchEvent(new CustomEvent('new-alarm-received'));
+      });
+
+      socket.on('alarm-updated', (data) => {
+        // If the updated alarm is for the currently viewed machine, reload this page's data
+        if (data?.alarm && String(data.alarm.mcId) === String(machineId)) {
+          if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+          loadTimeoutRef.current = setTimeout(() => load({ background: true }), 500);
+        }
+        // Always notify other components (like the sidebar) that an alarm status has changed
+        window.dispatchEvent(new CustomEvent('alarm-status-updated'));
       });
 
       socketRef.current = socket;

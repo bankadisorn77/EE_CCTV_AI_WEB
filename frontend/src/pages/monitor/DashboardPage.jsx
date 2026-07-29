@@ -284,6 +284,16 @@ export default function DashboardPage(){
         }, 1000); // Debounce to prevent spamming reloads
       });
 
+      let updateTimeout = null;
+      socket.on('alarm-updated', () => {
+        // Full reload on alarm update
+        if (updateTimeout) clearTimeout(updateTimeout);
+        updateTimeout = setTimeout(() => {
+          load({ background: true });
+          window.dispatchEvent(new CustomEvent('alarm-status-updated'));
+        }, 1000); // Debounce
+      });
+
       socket.on('device-status', () => {
         // หน่วงเวลารอให้ Backend อัปเดตข้อมูลลง Database ให้เสร็จก่อนดึง API ใหม่
         setTimeout(updateStats, 500);

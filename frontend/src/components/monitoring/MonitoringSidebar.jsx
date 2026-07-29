@@ -3,6 +3,7 @@ import { useNotifications } from "../../context/NotificationContext";
 import { DashboardIcon, ZoneIcon, MachineIcon, ChevronIcon, LoadingIcon } from "../ui/Icons";
 import { Badge } from "../ui/StatusBadge";
 import { cn } from "../../lib/utils";
+import { io } from "socket.io-client"; // Import io
 import { fetchDevices, fetchAlarms } from "../../services/monitor";
 import { decodeToken } from "../../services/apiAuth";
 
@@ -84,6 +85,7 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [openZones, setOpenZones] = useState({});
+  const socketRef = useRef(null); // Add socketRef
   const reloadTimeoutRef = useRef(null);
 
   const { unreadAlarms, unreadCount } = useNotifications();
@@ -131,19 +133,49 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
       });
   }, []);
 
+  // Debounced handler to reload data for the sidebar
+  const handleDataUpdate = useCallback(() => {
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+    }
+    reloadTimeoutRef.current = setTimeout(() => {
+      loadData(); // Reloads data without showing the main loading spinner
+    }, 500); // Debounce for 500ms
+  }, [loadData]); // Dependency on loadData
+
   useEffect(() => {
     loadData(true); // Initial load
 
-    // Debounced handler to reload data for the sidebar
-    const handleDataUpdate = () => {
-      if (reloadTimeoutRef.current) {
-        clearTimeout(reloadTimeoutRef.current);
-      }
-      reloadTimeoutRef.current = setTimeout(() => {
-        loadData(); // Reloads data without showing the main loading spinner
-      }, 500); // Debounce for 500ms
-    };
+    // Setup WebSocket connection for the sidebar
+    const apiUrl = (import.meta.env.VITE_API_URL || "http://localhost:5050/api").replace(/\/api$/, "");
+    const socket = io(apiUrl, {
+      auth: {
+        token: sessionStorage.getItem('token') || localStorage.getItem('token'),
+      },
+    });
 
+    socket.on('connect', () => {
+      // console.log("MonitoringSidebar: Connected to WebSocket");
+      const tokenData = decodeToken();
+      if (tokenData) {
+        const role = tokenData.role;
+        const plantName = tokenData.plant;
+
+        if (role === "admin") {
+          socket.emit("join-plant", "ALL");
+        } else {
+          if (plantName) socket.emit("join-plant", plantName);
+          if (role === "engineer") socket.emit("join-plant", "Unassigned");
+        }
+      }
+    });
+
+    socket.on('alarm-updated', () => {
+      // console.log("MonitoringSidebar: Received alarm-updated event from WebSocket");
+      handleDataUpdate(); // Trigger data reload for sidebar
+    });
+
+    socket.on('new-alarm', handleDataUpdate); // Trigger data reload for sidebar
     window.addEventListener('alarm-status-updated', handleDataUpdate);
     window.addEventListener('new-alarm-received', handleDataUpdate); // Listen for new alarms
 
@@ -151,8 +183,9 @@ export default function MonitoringSidebar({ onSelect, selectedKey }) {
       window.removeEventListener('alarm-status-updated', handleDataUpdate);
       window.removeEventListener('new-alarm-received', handleDataUpdate);
       if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+      socketRef.current?.disconnect(); // Disconnect socket on unmount
     };
-  }, [loadData]);
+  }, [loadData, handleDataUpdate]); // Add handleDataUpdate to dependencies
 
   function toggleZone(zoneId) {
     setOpenZones((prev) => ({ ...prev, [zoneId]: !prev[zoneId] }));
