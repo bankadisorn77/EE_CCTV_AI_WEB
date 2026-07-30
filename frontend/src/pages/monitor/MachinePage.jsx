@@ -8,29 +8,6 @@ import { decodeToken } from "../../services/apiAuth";
 import { ClearAlarms } from "../../services/monitor";
 import { io } from "socket.io-client";
 
-// ── Mock API ──────────────────────────────────────────────────────────────────
-// async function fetchMachineAlarms(zoneId, machineId) {
-//   await new Promise((r) => setTimeout(r, 600));
-//   const types = ["Motion Detected", "Intrusion Alert", "Perimeter Breach", "Loitering", "Object Left"];
-//   const statuses = ["Uninspected", "Confirmed", "False Alarm"];
-//   return Array.from({ length: 45 }, (_, i) => ({
-//     id: `ALM-${String(2000 + i).padStart(4, "0")}`,
-//     zoneId,
-//     machineId,
-//     type: types[i % types.length],
-//     status: statuses[i % statuses.length],
-//     confidence: Math.floor(60 + Math.random() * 40),
-//     timestamp: new Date(Date.now() - i * 18 * 60 * 1000).toISOString(),
-//     // Placeholder image URLs (replace with real snapshot URLs from API)
-//     images: Array.from({ length: 4 }, (_, j) => ({
-//       id: `img-${i}-${j}`,
-//       url: `https://placehold.co/960x540/1e1e2e/6366f1?text=Snapshot+${i + 1}-${j + 1}`,
-//       thumb: `https://placehold.co/160x90/1e1e2e/6366f1?text=${j + 1}`,
-//       capturedAt: new Date(Date.now() - i * 18 * 60 * 1000 - j * 3000).toISOString(),
-//     })),
-//   }));
-// }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(iso) {
   return new Date(iso).toLocaleString("en-GB", {
@@ -60,7 +37,10 @@ export default function MachinePage({ zoneId, machineId }) {
   const cancelledRef = useRef(false);
   const loadTimeoutRef = useRef(null);
 
-  const selectedIndex = alarms.findIndex((a) => a.id === selectedAlarm?.id);
+  // Derived state: ดึง Alarm ตัวล่าสุดจากตารางเพื่อแก้ปัญหา UI Sync ข้าม Account
+  const currentSelectedAlarm = alarms.find((a) => a.id === selectedAlarm?.id) || selectedAlarm;
+
+  const selectedIndex = alarms.findIndex((a) => a.id === currentSelectedAlarm?.id);
   const { markRead } = useNotifications();
   const currentRole = decodeToken()?.role?.toLowerCase();
   const canClearFalseAlarms = ["admin", "engineer"].includes(currentRole);
@@ -158,7 +138,6 @@ export default function MachinePage({ zoneId, machineId }) {
 
       socket.on('connect', () => {
         load();
-        // console.log("MachinePage: Connected to WebSocket");
         const tokenData = decodeToken();
         if (tokenData) {
           const role = tokenData.role;
@@ -174,22 +153,18 @@ export default function MachinePage({ zoneId, machineId }) {
       });
 
       socket.on('new-alarm', (data) => {
-        // If the new alarm is for the currently viewed machine, reload this page's data
         if (data?.alarm && String(data.alarm.mcId) === String(machineId)) {
           if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
           loadTimeoutRef.current = setTimeout(() => load({ background: true }), 500);
         }
-        // Always notify other components (like the sidebar) that a new alarm has arrived
         window.dispatchEvent(new CustomEvent('new-alarm-received'));
       });
 
       socket.on('alarm-updated', (data) => {
-        // If the updated alarm is for the currently viewed machine, reload this page's data
         if (data?.alarm && String(data.alarm.mcId) === String(machineId)) {
           if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
           loadTimeoutRef.current = setTimeout(() => load({ background: true }), 500);
         }
-        // Always notify other components (like the sidebar) that an alarm status has changed
         window.dispatchEvent(new CustomEvent('alarm-status-updated'));
       });
 
@@ -209,46 +184,29 @@ export default function MachinePage({ zoneId, machineId }) {
   }, [machineId, load]);
 
   // ── Action handlers ───────────────────────────────────────────────────────
-  // async function handleAction(alarmId, newStatus) {
-  //   console.log(`Updating alarm ${alarmId} to status: ${newStatus}`);
-  //   setUpdatingId(alarmId);
-  //   await new Promise((r) => setTimeout(r, 600)); // TODO: real API call
-  //   setAlarms((prev) =>
-  //     prev.map((a) => a.id === alarmId ? { ...a, status: newStatus } : a)
-  //   );
-  //   if (selectedAlarm?.id === alarmId) {
-  //     setSelectedAlarm((prev) => ({ ...prev, status: newStatus }));
-  //   }
-  //   setUpdatingId(null);
-  // }
-  // ── Action handlers ───────────────────────────────────────────────────────
   async function handleAction(alarmId, newStatus) {
-    // console.log(`Updating alarm ${alarmId} to status: ${newStatus}`);
     setUpdatingId(alarmId);
 
     try {
-      // 1. เรียกใช้งาน API ของจริงแทน setTimeout
       await updateAlarmStatus(alarmId, newStatus);
 
-      // 2. ถ้า API ทำงานสำเร็จ ค่อยมาอัปเดตหน้าตาเว็บ (State)
-      setAlarms((prev) => 
-        // Re-sort after updating status, as "Uninspected" items should no longer be at the top
-        sortAlarms(prev.map((a) => a.id === alarmId ? { ...a, status: newStatus } : a))
+      const newAlarms = alarms.map((a) =>
+        a.id === alarmId ? { ...a, status: newStatus } : a
       );
+      const sortedNewAlarms = sortAlarms(newAlarms);
+      setAlarms(sortedNewAlarms);
 
-      if (selectedAlarm?.id === alarmId) {
-        setSelectedAlarm((prev) => ({ ...prev, status: newStatus }));
+      if (currentSelectedAlarm?.id === alarmId) {
+        const updatedSelected = sortedNewAlarms.find(a => a.id === alarmId);
+        if (updatedSelected) {
+          setSelectedAlarm(updatedSelected);
+        }
       }
-
-      // Notify other components (like the sidebar) to re-fetch data
       window.dispatchEvent(new CustomEvent('alarm-status-updated'));
 
     } catch (error) {
-      // 3. ดักจับ Error เผื่อเซิร์ฟเวอร์มีปัญหา
       console.error("Failed to update alarm status:", error);
-      // ตรงนี้คุณอาจจะเรียกใช้ Toast แจ้งเตือน user ว่า "อัปเดตไม่สำเร็จ" ได้ครับ
     } finally {
-      // 4. ปิดสถานะ Loading ไม่ว่าจะสำเร็จหรือพังก็ตาม
       setUpdatingId(null);
     }
   }
@@ -267,7 +225,6 @@ export default function MachinePage({ zoneId, machineId }) {
     ? alarms
     : alarms.filter((a) => a.status === activeFilter);
 
-  // Reset to page 1 when filter changes (handled via useEffect)
   useEffect(() => { setPage(1); }, [activeFilter]);
 
   // ── Pagination ────────────────────────────────────────────────────────────
@@ -289,7 +246,7 @@ export default function MachinePage({ zoneId, machineId }) {
     );
   }
 
-  const images = selectedAlarm?.images ?? [];
+  const images = currentSelectedAlarm?.images ?? [];
   const currentImg = images[activeImage];
 
   return (
@@ -338,7 +295,6 @@ export default function MachinePage({ zoneId, machineId }) {
 
           {/* ── LEFT: image viewer ── */}
           <div className="flex-1 min-w-0 space-y-3">
-
 
             {/* Alarm navigator bar */}
             <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2">
@@ -401,14 +357,14 @@ export default function MachinePage({ zoneId, machineId }) {
               )}
 
               {/* Overlay: alarm ID + timestamp */}
-              {selectedAlarm && (
+              {currentSelectedAlarm && (
                 <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-gradient-to-t from-black/70 to-transparent">
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-white font-mono text-xs font-bold">{selectedAlarm.id}</p>
-                      <p className="text-white/60 text-[10px]">{formatTime(selectedAlarm.timestamp)}</p>
+                      <p className="text-white font-mono text-xs font-bold">{currentSelectedAlarm.id}</p>
+                      <p className="text-white/60 text-[10px]">{formatTime(currentSelectedAlarm.timestamp)}</p>
                     </div>
-                    <StatusBadge status={selectedAlarm.status} />
+                    <StatusBadge status={currentSelectedAlarm.status} />
                   </div>
                 </div>
               )}
@@ -420,39 +376,19 @@ export default function MachinePage({ zoneId, machineId }) {
                 </div>
               )}
             </div>
-
-            {/* Thumbnail strip */}
-            {/*
-            {images.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {images.map((img, idx) => (
-                  <button
-                    key={img.id}
-                    onClick={() => setActiveImage(idx)}
-                    className={`
-                      flex-shrink-0 w-24 aspect-video rounded-xl overflow-hidden ring-2 transition-all duration-150
-                      ${activeImage === idx ? "ring-indigo-500 scale-105 shadow-md" : "ring-transparent opacity-60 hover:opacity-90"}
-                    `}
-                  >
-                    <img src={img.thumb} alt={`Snapshot ${idx + 1}`} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-            */}
           </div>
 
           {/* ── RIGHT: detail + action panel ── */}
           <div className="w-72 flex-shrink-0 space-y-4">
 
-            {selectedAlarm ? (
+            {currentSelectedAlarm ? (
               <>
                 {/* Alarm info card */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold text-gray-800">Alarm Detail</h2>
                     <span className="font-mono text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-semibold">
-                      {selectedAlarm.id}
+                      {currentSelectedAlarm.id}
                     </span>
                   </div>
 
@@ -460,8 +396,8 @@ export default function MachinePage({ zoneId, machineId }) {
                     {[
                       { label: "Zone", value: zoneId?.replace(/-/g, " ") },
                       { label: "Machine", value: machineId?.toUpperCase() },
-                      { label: "Event Type", value: selectedAlarm.type },
-                      { label: "Time", value: formatTime(selectedAlarm.timestamp) },
+                      { label: "Event Type", value: currentSelectedAlarm.type },
+                      { label: "Time", value: formatTime(currentSelectedAlarm.timestamp) },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex justify-between gap-2">
                         <span className="text-gray-400 font-medium">{label}</span>
@@ -473,14 +409,14 @@ export default function MachinePage({ zoneId, machineId }) {
                     <div>
                       <div className="flex justify-between mb-1">
                         <span className="text-gray-400 font-medium">Confidence</span>
-                        <span className="text-gray-700 font-bold">{selectedAlarm.confidence}%</span>
+                        <span className="text-gray-700 font-bold">{currentSelectedAlarm.confidence}%</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${selectedAlarm.confidence >= 85 ? "bg-red-400" :
-                              selectedAlarm.confidence >= 70 ? "bg-amber-400" : "bg-gray-300"
+                          className={`h-full rounded-full transition-all duration-500 ${currentSelectedAlarm.confidence >= 85 ? "bg-red-400" :
+                              currentSelectedAlarm.confidence >= 70 ? "bg-amber-400" : "bg-gray-300"
                             }`}
-                          style={{ width: `${selectedAlarm.confidence}%` }}
+                          style={{ width: `${currentSelectedAlarm.confidence}%` }}
                         />
                       </div>
                     </div>
@@ -488,7 +424,7 @@ export default function MachinePage({ zoneId, machineId }) {
                     {/* Status */}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400 font-medium">Status</span>
-                      <StatusBadge status={selectedAlarm.status} />
+                      <StatusBadge status={currentSelectedAlarm.status} />
                     </div>
                   </div>
                 </div>
@@ -498,18 +434,18 @@ export default function MachinePage({ zoneId, machineId }) {
                   <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Actions</h3>
 
                   <button
-                    disabled={selectedAlarm.status === "Confirmed" || updatingId === selectedAlarm.id}
-                    onClick={() => handleAction(selectedAlarm.id, "Confirmed")}
+                    disabled={currentSelectedAlarm.status === "Confirmed" || updatingId === currentSelectedAlarm.id}
+                    onClick={() => handleAction(currentSelectedAlarm.id, "Confirmed")}
                     className={`
                       w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold
                       transition-all duration-200
-                      ${selectedAlarm.status === "Confirmed"
+                      ${currentSelectedAlarm.status === "Confirmed"
                         ? "bg-red-50 text-red-300 cursor-not-allowed ring-1 ring-red-100"
                         : "bg-red-500 hover:bg-red-600 text-white shadow-sm hover:shadow-md active:scale-95"
                       }
                     `}
                   >
-                    {updatingId === selectedAlarm.id ? (
+                    {updatingId === currentSelectedAlarm.id ? (
                       <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -517,22 +453,22 @@ export default function MachinePage({ zoneId, machineId }) {
                     ) : (
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></svg>
                     )}
-                    {selectedAlarm.status === "Confirmed" ? "Already Confirmed" : "Confirm Alarm"}
+                    {currentSelectedAlarm.status === "Confirmed" ? "Already Confirmed" : "Confirm Alarm"}
                   </button>
 
                   <button
-                    disabled={selectedAlarm.status === "False Alarm" || updatingId === selectedAlarm.id}
-                    onClick={() => handleAction(selectedAlarm.id, "False Alarm")}
+                    disabled={currentSelectedAlarm.status === "False Alarm" || updatingId === currentSelectedAlarm.id}
+                    onClick={() => handleAction(currentSelectedAlarm.id, "False Alarm")}
                     className={`
                       w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold
                       transition-all duration-200
-                      ${selectedAlarm.status === "False Alarm"
+                      ${currentSelectedAlarm.status === "False Alarm"
                         ? "bg-gray-50 text-gray-300 cursor-not-allowed ring-1 ring-gray-100"
                         : "bg-white hover:bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:ring-gray-300 shadow-sm active:scale-95"
                       }
                     `}
                   >
-                    {updatingId === selectedAlarm.id ? (
+                    {updatingId === currentSelectedAlarm.id ? (
                       <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -540,7 +476,7 @@ export default function MachinePage({ zoneId, machineId }) {
                     ) : (
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
                     )}
-                    {selectedAlarm.status === "False Alarm" ? "Marked False Alarm" : "Mark as False Alarm"}
+                    {currentSelectedAlarm.status === "False Alarm" ? "Marked False Alarm" : "Mark as False Alarm"}
                   </button>
                 </div>
 
@@ -707,7 +643,7 @@ export default function MachinePage({ zoneId, machineId }) {
                   </tr>
                 )}
                 {pageAlarms.map((alarm) => {
-                  const isSelected = selectedAlarm?.id === alarm.id;
+                  const isSelected = currentSelectedAlarm?.id === alarm.id;
                   return (
                     <tr
                       key={alarm.id}

@@ -128,13 +128,14 @@ router.put('/alarms/:id', verifyToken, async (req, res) => {
   if (!alarm) return res.status(404).json({ error: "Alarm not found" });
   await alarm.update({ isFlagged: status });
   const device = await Device.findByPk(alarm.mcId);
+  const payload = { alarm: { id: alarm.id, mcId: alarm.mcId, isFlagged: status } };
   const io = req.app.get('socketio');
-  io.to(device.plant).emit('new-alarm');
-  if (device.plant.toLowerCase() !== 'unassigned') {
-    io.to('Unassigned').emit('new-alarm');
-    io.to('unassigned').emit('new-alarm');
+  if (device?.plant) {
+    io.to(device.plant).emit('alarm-updated', payload);
   }
-  io.to('ALL').emit('new-alarm');
+  io.to('ALL').emit('alarm-updated', payload);
+  io.to('Unassigned').emit('alarm-updated', payload);
+  io.to('unassigned').emit('alarm-updated', payload);
   res.json({ message: "Alarm status updated successfully" });
 });
 
@@ -187,13 +188,13 @@ router.delete('/alarms/:mcid', verifyToken, async (req, res) => {
 
     const device = await Device.findOne({ where: { mcId: mcid } });
     const io = req.app.get('socketio');
-
+    const payload = { alarm: { mcId: mcid } };
     if (device?.plant) {
-      io.to(device.plant).emit('new-alarm');
+      io.to(device.plant).emit('alarm-updated', payload);
     }
-    io.to('ALL').emit('new-alarm');
-    io.to('Unassigned').emit('new-alarm');
-    io.to('unassigned').emit('new-alarm');
+    io.to('ALL').emit('alarm-updated', payload);
+    io.to('Unassigned').emit('alarm-updated', payload);
+    io.to('unassigned').emit('alarm-updated', payload);
     // console.log(`Deleted ${deletedCount} false alarm records for mcId ${mcid}`);
     res.json({ message: `Deleted ${deletedCount} false alarm records for mcId ${mcid}` });
   } catch (err) {
